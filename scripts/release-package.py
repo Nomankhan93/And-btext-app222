@@ -139,12 +139,11 @@ def verify_manifest(stage: Path) -> None:
     subprocess.run(['sha256sum', '-c', 'SHA256SUMS.txt'], cwd=stage, check=True)
 
 
-def deterministic_zip(stage: Path, zip_path: Path) -> None:
+def deterministic_zip(stage: Path, zip_path: Path, prefix: str) -> None:
     zip_path.parent.mkdir(parents=True, exist_ok=True)
     tmp = zip_path.with_suffix(zip_path.suffix + '.tmp')
     if tmp.exists():
         tmp.unlink()
-    prefix = stage.name
     with zipfile.ZipFile(tmp, 'w', compression=zipfile.ZIP_DEFLATED, compresslevel=9) as zf:
         for path in sorted(p for p in stage.rglob('*') if p.is_file()):
             rel = path.relative_to(stage).as_posix()
@@ -178,6 +177,43 @@ def scan_zip(zip_path: Path) -> tuple[list[str], dict[str, int]]:
     return issues, refs
 
 
+
+def run_preflight(root: Path, label: str) -> None:
+    script = root / 'scripts' / 'preflight.mjs'
+    if not script.is_file():
+        raise RuntimeError(f'{label} preflight script is missing: {script}')
+    try:
+        subprocess.run(['node', str(script)], cwd=root, check=True)
+    except FileNotFoundError as exc:
+        raise RuntimeError('Node.js is required to run the release preflight gate') from exc
+    except subprocess.CalledProcessError as exc:
+        raise RuntimeError(f'{label} preflight failed with exit code {exc.returncode}') from exc
+
+
+def verify_zip_layout(zip_path: Path, expected_root: str) -> None:
+    prefix = f'{expected_root}/'
+    with zipfile.ZipFile(zip_path, 'r') as zf:
+        names = [info.filename for info in zf.infolist() if not info.is_dir()]
+    if not names:
+        raise RuntimeError('Release ZIP contains no files')
+    wrong = [name for name in names if not name.startswith(prefix)]
+    if wrong:
+        raise RuntimeError(f'Release ZIP contains paths outside {expected_root}/: {wrong[:5]}')
+    if f'{expected_root}/package.json' not in names or f'{expected_root}/.env.example' not in names:
+        raise RuntimeError('Release ZIP is missing package.json or .env.example')
+
+
+def verify_extracted_release(zip_path: Path, expected_root: str) -> None:
+    with tempfile.TemporaryDirectory(prefix='bulktext-release-verify-') as tmp:
+        extract_dir = Path(tmp)
+        with zipfile.ZipFile(zip_path, 'r') as zf:
+            zf.extractall(extract_dir)
+        extracted = extract_dir / expected_root
+        if not extracted.is_dir():
+            raise RuntimeError(f'Extracted release root is missing: {expected_root}')
+        verify_manifest(extracted)
+        run_preflight(extracted, 'ZIP_EXTRACTED')
+
 def main() -> int:
     parser = argparse.ArgumentParser(description='Build deterministic BulkText clean source release ZIP.')
     parser.add_argument('--root', default=str(Path(__file__).resolve().parents[1]))
@@ -205,10 +241,16 @@ def main() -> int:
             f'Latest migration {latest_migration.name} does not declare backend contract version {backend_version}'
         )
 
+    try:
+        run_preflight(root, 'SOURCE')
+    except RuntimeError as exc:
+        raise SystemExit(str(exc)) from exc
+
     output_dir = Path(args.output_dir).resolve() if args.output_dir else root.parent / 'release'
     output_dir.mkdir(parents=True, exist_ok=True)
-    stage = Path(args.stage_dir).resolve() if args.stage_dir else output_dir / f'bulktext-web-{version}'
-    zip_path = output_dir / f'bulktext-web-{version}-source.zip'
+    release_root_name = f'bulktext-web-{version}'
+    stage = Path(args.stage_dir).resolve() if args.stage_dir else output_dir / release_root_name
+    zip_path = output_dir / f'{release_root_name}-source.zip'
     zip_sha_path = output_dir / f'bulktext-web-{version}-source.zip.sha256'
 
     copy_stage(root, stage)
@@ -219,13 +261,26 @@ def main() -> int:
         print('\n'.join(f'RELEASE SCAN FAIL: {x}' for x in issues), file=sys.stderr)
         return 2
 
+    try:
+        run_preflight(stage, 'STAGE')
+    except RuntimeError as exc:
+        print(f'RELEASE PREFLIGHT FAIL: {exc}', file=sys.stderr)
+        return 4
+
     write_manifest(stage)
     verify_manifest(stage)
-    deterministic_zip(stage, zip_path)
+    deterministic_zip(stage, zip_path, release_root_name)
     zip_issues, zip_refs = scan_zip(zip_path)
     if zip_issues:
         print('\n'.join(f'ZIP SCAN FAIL: {x}' for x in zip_issues), file=sys.stderr)
         return 3
+
+    try:
+        verify_zip_layout(zip_path, release_root_name)
+        verify_extracted_release(zip_path, release_root_name)
+    except RuntimeError as exc:
+        print(f'ZIP VERIFY FAIL: {exc}', file=sys.stderr)
+        return 5
 
     zip_sha = sha256_file(zip_path)
     zip_sha_path.write_text(f'{zip_sha}  {zip_path.name}\n', encoding='utf-8', newline='\n')
@@ -236,6 +291,12 @@ def main() -> int:
     print(f'ZIP_SHA_FILE={zip_sha_path}')
     print(f'STAGE_EXPECTED_IDENTIFIER_REFS service_role={stage_refs["service_role"]} SUPABASE_SERVICE_ROLE_KEY={stage_refs["SUPABASE_SERVICE_ROLE_KEY"]}')
     print(f'ZIP_EXPECTED_IDENTIFIER_REFS service_role={zip_refs["service_role"]} SUPABASE_SERVICE_ROLE_KEY={zip_refs["SUPABASE_SERVICE_ROLE_KEY"]}')
+    print('SOURCE_PREFLIGHT=PASS')
+    print('STAGE_PREFLIGHT=PASS')
+    print('ZIP_LAYOUT_VERIFY=PASS')
+    print('ZIP_MANIFEST_VERIFY=PASS')
+    print('ZIP_EXTRACTED_PREFLIGHT=PASS')
+    print(f'ZIP_ROOT={release_root_name}')
     print('RELEASE_PATH_SCAN=PASS')
     print('RELEASE_SECRET_VALUE_SCAN=PASS')
     print('ZIP_PATH_SCAN=PASS')

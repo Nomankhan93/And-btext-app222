@@ -1,7 +1,7 @@
-# Current Patch — Web 0.19.2
+# Current Patch — Web 0.19.3
 
-**Installed PWA Vertical Scrolling Fix**
+**Release Artifact Integrity & Validation**
 
-Installed/standalone PWA pages now retain normal vertical document scrolling while preserving the fixed mobile bottom navigation and the Tools sheet's internal scrolling. The old standalone-only `overscroll-behavior-y: none` restriction is removed and regression coverage guards the scroll contract.
+Release generation now validates the source tree, staged clean source and extracted ZIP before reporting success. The missing placeholder-only `.env.example` is restored, the checksum manifest is refreshed, backup paths remain excluded, and the generated source ZIP is required to use the `bulktext-web-0.19.3/` root.
 
-See `PATCH_0_19_2_README.md`.
+See `PATCH_0_19_3_README.md`.
