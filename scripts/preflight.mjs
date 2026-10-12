@@ -44,7 +44,7 @@ const forbiddenPresent=[]; for (const file of forbiddenFiles) { try { await acce
 if (missing.length || forbiddenPresent.length) { if(missing.length) console.error(`Preflight failed. Missing: ${missing.join(', ')}`); if(forbiddenPresent.length) console.error(`Preflight failed. Legacy files present: ${forbiddenPresent.join(', ')}`); process.exit(1) }
 
 const packageJson = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'))
-if (packageJson.version !== '0.18.8') { console.error(`Preflight failed. Expected package version 0.18.8, got ${packageJson.version}`); process.exit(1) }
+if (packageJson.version !== '0.18.9') { console.error(`Preflight failed. Expected package version 0.18.9, got ${packageJson.version}`); process.exit(1) }
 
 const migration = await readFile(new URL('../supabase/migrations/20261001000340_delivery_attempts_callbacks_recovery.sql', import.meta.url), 'utf8')
 const requiredMigrationMarkers = [
@@ -142,6 +142,6 @@ for (const marker of ["version', '') <> '0.18.5'", 'Production schema must not e
   if (!freshVerifier.includes(marker)) { console.error(`Preflight failed. Fresh-schema 0.18.4 marker missing: ${marker}`); process.exit(1) }
 }
 
-console.log('BulkText Web 0.18.8 / backend 0.18.5 preflight PASS')
+console.log('BulkText Web 0.18.9 / backend 0.18.5 preflight PASS')
 
-if (packageJson.bulktext?.backendContractVersion !== '0.18.5') { console.error('Expected backend contract 0.18.5 for PWA release 0.18.8'); process.exit(1) }
+if (packageJson.bulktext?.backendContractVersion !== '0.18.5') { console.error('Expected backend contract 0.18.5 for Web 0.18.9'); process.exit(1) }

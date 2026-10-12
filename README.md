@@ -1,9 +1,9 @@
-# Web 0.18.8 — PWA Installation, Service Worker & Offline Safety
+# Web 0.18.9 — Public Landing, Brand System & Auth Experience
 
-BulkText Web `0.18.8` adds production PWA installability, branded app icons/favicons, a controlled service-worker update lifecycle, safe app-shell/static-asset caching and explicit offline UX on top of the `0.18.7-r2` mobile bottom-navigation release.
+BulkText Web `0.18.9` turns the signed-out root into a product-led public landing page, integrates the official BulkText icon/logo, applies the final deep-navy / blue / cyan brand system to public and auth surfaces, and refreshes authentication presentation without changing authentication logic.
 
-Frontend version is `0.18.8`; backend contract remains `0.18.5`. No database migration is included.
+The landing page uses accurate commercial wording: no Pricing navigation before plans exist, no unsupported `Start Free` promise, no claim that carrier SMS is free, and no generic retry marketing. The product message centers on exact phone/SIM routing, Android Gateway operation and **Live send and delivery status** with **Delivery & Recovery Tracking**.
 
-The service worker caches only the same-origin application shell and static assets. Supabase/auth, campaign confirmation, exact-SIM authorization, durable queue, callbacks, recovery and gateway requests are never cached or replayed. BulkText does **not** implement offline sending or Background Sync in this release.
+Frontend version is `0.18.9`; backend contract remains `0.18.5`. No database migration or Android change is included. Existing PWA/offline safety, mobile bottom navigation, exact-SIM authorization, durable queue, delivery/recovery semantics and draft/live-status reliability are preserved.
 
-See `PATCH_0_18_8_README.md`, `VALIDATION_0_18_8.md` and `HANDOFF_0_18_8.md`.
+See `PATCH_0_18_9_README.md`, `VALIDATION_0_18_9.md` and `HANDOFF_0_18_9.md`.

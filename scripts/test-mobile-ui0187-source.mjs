@@ -11,7 +11,7 @@ const campaigns = read('src/pages/CampaignsPage.tsx')
 const detail = read('src/pages/CampaignDetailPage.tsx')
 const css = read('src/styles/app.css')
 
-assert.equal(pkg.version, '0.18.7-r2')
+assert.equal(pkg.version, '0.18.9')
 assert.equal(pkg.bulktext?.backendContractVersion, '0.18.5')
 assert.match(shell, /aria-label="Mobile navigation"/)
 assert.match(shell, /aria-expanded=\{toolsOpen\}/)

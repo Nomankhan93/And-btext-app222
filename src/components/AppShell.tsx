@@ -3,6 +3,7 @@ import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthProvider'
 import { mobilePrimaryNavigation, primaryNavigation, secondaryNavigation } from '../lib/productNavigation'
 import { PwaStatusRegion } from './PwaStatus'
+import { BrandLockup } from './BrandLockup'
 
 type MobileIconKind = 'home' | 'campaigns' | 'phone' | 'tools'
 
@@ -73,10 +74,7 @@ export function AppShell() {
   return (
     <div className="app-shell">
       <header className="topbar">
-        <div className="brand-block">
-          <div className="brand-mark" aria-hidden="true">BT</div>
-          <div><strong>BulkText</strong><span>SIM-powered business messaging</span></div>
-        </div>
+        <BrandLockup className="topbar-brand" showTagline />
 
         <div className="topbar-actions">
           <div className="account-menu">

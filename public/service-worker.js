@@ -1,8 +1,8 @@
-/* BulkText Web 0.18.8 service worker.
+/* BulkText Web 0.18.9 service worker.
  * Safety boundary: cache only the same-origin app shell and static assets.
  * Supabase/auth/queue/delivery/gateway requests are never cached or replayed.
  */
-const VERSION = '0.18.8'
+const VERSION = '0.18.9'
 const CACHE_PREFIX = 'bulktext-pwa-'
 const SHELL_CACHE = `${CACHE_PREFIX}shell-${VERSION}`
 const RUNTIME_CACHE = `${CACHE_PREFIX}runtime-${VERSION}`
@@ -20,6 +20,7 @@ const PRECACHE_URLS = [
   '/icons/icon-512.png',
   '/icons/icon-maskable-192.png',
   '/icons/icon-maskable-512.png',
+  '/branding/bulktext-logo.png',
 ]
 
 async function precacheAppShell() {

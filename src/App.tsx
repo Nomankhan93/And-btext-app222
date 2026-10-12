@@ -23,6 +23,15 @@ import { VerifyEmailPage } from './auth/VerifyEmailPage'
 import { AuthCallbackPage } from './auth/AuthCallbackPage'
 import { RequireAuth } from './auth/RequireAuth'
 import { RequireWorkspace } from './workspace/RequireWorkspace'
+import { LandingPage } from './pages/LandingPage'
+import { useAuth } from './auth/AuthProvider'
+import { LoadingState } from './components/StateViews'
+
+function PublicHomeRoute() {
+  const { user, loading } = useAuth()
+  if (loading) return <LoadingState label="Loading BulkText…" />
+  return user ? <Navigate to="/dashboard" replace /> : <LandingPage />
+}
 
 export default function App() {
   return (
@@ -58,7 +67,7 @@ export default function App() {
         </Route>
       </Route>
 
-      <Route path="/" element={<Navigate to="/dashboard" replace />} />
+      <Route path="/" element={<PublicHomeRoute />} />
       <Route path="*" element={<NotFoundPage />} />
     </Routes>
   )

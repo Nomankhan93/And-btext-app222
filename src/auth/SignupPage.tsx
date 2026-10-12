@@ -29,14 +29,14 @@ export function SignupPage() {
   return (
     <AuthLayout
       title="Create your account"
-      subtitle="Create your BulkText account, pair your Android phone and use your own selected SIM for messaging."
+      subtitle="Create your account, pair an Android phone and send through the exact SIM you choose."
       footer={<>Already have an account? <Link to="/auth/login">Sign in</Link>.</>}
     >
       <form className="form-stack" onSubmit={submit}>
         <label>Your name<input autoComplete="name" required minLength={2} value={displayName} onChange={(e) => setDisplayName(e.target.value)} /></label>
         <label>Email<input type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} /></label>
         <label>Password<input type="password" autoComplete="new-password" minLength={8} required value={password} onChange={(e) => setPassword(e.target.value)} /></label>
-        <p className="field-help">Use at least 8 characters. Supabase Auth enforces the account session.</p>
+        <p className="field-help">Use at least 8 characters for your password.</p>
         {error ? <p className="form-error">{error}</p> : null}
         <button className="primary-button" type="submit" disabled={busy}>{busy ? 'Creating account…' : 'Create account'}</button>
       </form>

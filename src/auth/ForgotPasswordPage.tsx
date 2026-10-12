@@ -25,8 +25,8 @@ export function ForgotPasswordPage() {
   }
 
   return (
-    <AuthLayout title="Reset your password" subtitle="We will send a Supabase Auth recovery link to your email." footer={<Link to="/auth/login">Back to sign in</Link>}>
-      {sent ? <div className="notice success-notice">Check your inbox (or local Mailpit) for the recovery link.</div> : (
+    <AuthLayout title="Reset your password" subtitle="Enter your email and we will send you a secure password recovery link." footer={<Link to="/auth/login">Back to sign in</Link>}>
+      {sent ? <div className="notice success-notice">Check your inbox for the recovery link.</div> : (
         <form className="form-stack" onSubmit={submit}>
           <label>Email<input type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} /></label>
           {error ? <p className="form-error">{error}</p> : null}

@@ -1,0 +1,55 @@
+import assert from 'node:assert/strict'
+import fs from 'node:fs'
+
+const read = (path) => fs.readFileSync(path, 'utf8')
+const pkg = JSON.parse(read('package.json'))
+const app = read('src/App.tsx')
+const landing = read('src/pages/LandingPage.tsx')
+const authLayout = read('src/auth/AuthLayout.tsx')
+const shell = read('src/components/AppShell.tsx')
+const brand = read('src/components/BrandLockup.tsx')
+const css = read('src/styles/app.css')
+const index = read('index.html')
+const manifest = JSON.parse(read('public/manifest.webmanifest'))
+const serviceWorker = read('public/service-worker.js')
+
+let assertions = 0
+function check(condition, message) {
+  assertions += 1
+  assert.ok(condition, message)
+}
+
+check(pkg.version === '0.18.9', 'frontend version must be 0.18.9')
+check(pkg.bulktext?.backendContractVersion === '0.18.5', 'backend contract must remain pinned to 0.18.5')
+check(Boolean(pkg.scripts?.['test:landing-0189']), 'targeted landing test script must exist')
+check(app.includes('PublicHomeRoute') && app.includes('<LandingPage />'), 'public root must render the landing page for signed-out visitors')
+check(app.includes('user ? <Navigate to="/dashboard" replace /> : <LandingPage />'), 'signed-in root visits must redirect to dashboard')
+check(landing.includes('Send business SMS directly from your own SIM'), 'hero value proposition required')
+check(landing.includes('Get Started') && landing.includes('Create Your Account'), 'free-tier wording must not be required for CTAs')
+check(!landing.includes('Start Free'), 'Start Free must not appear without a defined free tier')
+check(!landing.includes('Pricing'), 'Pricing navigation must be omitted until pricing is finalized')
+check(landing.includes('Live send and delivery status'), 'delivery wording must use live send and delivery status')
+check(landing.includes('Delivery & Recovery Tracking'), 'recovery wording must replace generic retry marketing')
+check(!landing.includes('Delivery & Retry Tracking'), 'generic retry marketing wording must not appear')
+check(landing.includes('No third-party gateway fee'), 'gateway fee claim must be scoped to third-party gateway fees')
+check(landing.includes('carrier balance or bundle'), 'carrier costs must be disclosed')
+check(landing.includes('Exact SIM1 / SIM2 Routing'), 'exact SIM routing must be a core feature')
+check(landing.includes('Turn your Android phone into your SMS gateway'), 'Android gateway differentiator must be prominent')
+check(landing.includes('Traditional hosted SMS gateway') && landing.includes('BulkText'), 'factual comparison section required')
+check(landing.includes('Delivery evidence depends on device and network callbacks'), 'delivery evidence caveat must be visible')
+check(landing.includes('faq-list') && landing.includes('Does BulkText require a third-party SMS gateway?'), 'FAQ section required')
+check(authLayout.includes('/branding/bulktext-logo.png'), 'official horizontal logo must be used on desktop auth surfaces')
+check(authLayout.includes('/icons/icon-192.png'), 'official app icon must be used on mobile auth surfaces')
+check(shell.includes('<BrandLockup className="topbar-brand" showTagline />'), 'authenticated header must use final BulkText branding')
+check(brand.includes('/icons/icon-192.png'), 'shared brand lockup must use official icon')
+check(css.includes('--brand: #0b63f6') && css.includes('--brand-dark: #071b4a') && css.includes('--brand-cyan: #08c7f4'), 'final navy/blue/cyan brand tokens required')
+check(css.includes('.marketing-header') && css.includes('.marketing-hero') && css.includes('.feature-grid'), 'landing layout styles required')
+check(!css.includes('@keyframes marketing'), 'marketing page must avoid ornamental animation systems')
+check(index.includes('BulkText — Send business SMS from your own SIM'), 'SEO title required')
+check(index.includes('og:title') && index.includes('twitter:card'), 'social metadata required')
+check(manifest.theme_color === '#071B4A' && manifest.background_color === '#F5FAFD', 'PWA manifest must use final brand colors')
+check(serviceWorker.includes("const VERSION = '0.18.9'"), 'service worker cache version must advance to 0.18.9')
+check(serviceWorker.includes("'/branding/bulktext-logo.png'"), 'final logo must be included in the static app-shell precache')
+check(!fs.existsSync('supabase/migrations/20261012000000_landing_brand.sql'), 'landing release must not introduce a database migration')
+
+console.log(`Web 0.18.9 landing + brand source contract: PASS (${assertions} assertions)`)

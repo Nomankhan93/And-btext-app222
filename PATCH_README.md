@@ -1,5 +1,5 @@
-# Web 0.18.8 — PWA Installation, Service Worker & Offline Safety
+# Current Patch — Web 0.18.9
 
-Current patch documentation: `PATCH_0_18_8_README.md`.
+Current patch: **Public Landing, Brand System & Auth Experience**.
 
-Frontend version is `0.18.8`. Backend contract remains `0.18.5`; no database migration is included. This release adds installability and safe offline app-shell behavior without changing SMS send, queue, callback, retry, UNKNOWN/no-resend or exact-SIM contracts.
+See `PATCH_0_18_9_README.md` for scope and preserved-contract details. No database migration or Android change is included.

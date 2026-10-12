@@ -25,7 +25,7 @@ export function ResetPasswordPage() {
   }
 
   return (
-    <AuthLayout title="Choose a new password" subtitle="Open this page from the recovery email so Supabase can establish the recovery session.">
+    <AuthLayout title="Choose a new password" subtitle="Choose a new password after opening the secure recovery link from your email.">
       {!user ? <div className="notice warning-notice">Waiting for a valid recovery session. Re-open the link from your reset email if needed.</div> : (
         <form className="form-stack" onSubmit={submit}>
           <label>New password<input type="password" autoComplete="new-password" minLength={8} required value={password} onChange={(e) => setPassword(e.target.value)} /></label>
