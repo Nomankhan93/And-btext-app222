@@ -1,12 +1,13 @@
-import { contractNotices, type DeliveryContractHealth } from '../lib/deliveryContract'
+import { useCampaignLiveStatus } from '../lib/useCampaignLiveStatus'
+import { contractNotices } from '../lib/deliveryContract'
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { EmptyState, LoadingState } from '../components/StateViews'
 import { deleteCampaign, getCampaignConfirmation, listCampaignConfirmationRecipients, type CampaignConfirmationDetail, type CampaignConfirmationRecipient } from '../lib/campaignConfirmationApi'
-import { canCreateDurableQueue, dispatchProgress, dispatchSummary, type CampaignDispatch } from '../lib/durableQueue'
-import { enqueueCampaignDispatch, getCampaignDispatch } from '../lib/durableQueueApi'
-import { attemptBadgeClass, deliveryProgress, deliverySummary, sentProgress, type CampaignDeliveryStatus, type CampaignMessageAttempt, type MessageRecoveryAction } from '../lib/deliveryAttempts'
-import { getCampaignContractHealth, getCampaignDeliveryStatus, listCampaignMessageAttempts, requestCampaignMessageRecovery } from '../lib/deliveryAttemptsApi'
+import { canCreateDurableQueue, dispatchProgress, dispatchSummary } from '../lib/durableQueue'
+import { enqueueCampaignDispatch } from '../lib/durableQueueApi'
+import { attemptBadgeClass, deliveryProgress, deliverySummary, sentProgress, type MessageRecoveryAction } from '../lib/deliveryAttempts'
+import { requestCampaignMessageRecovery } from '../lib/deliveryAttemptsApi'
 import { errorMessage } from '../lib/errors'
 import { authorizationIsActive, canAuthorizeCampaign, preflightSummary, type CampaignSendAuthorization, type CampaignSendPreflight } from '../lib/gatewayPreflight'
 import { authorizeCampaignSend, getCampaignSendPreflight, getLatestCampaignSendAuthorization, revokeCampaignSendAuthorization } from '../lib/gatewayPreflightApi'
@@ -19,16 +20,18 @@ function dateTime(value: string | null) {
 
 export function CampaignDetailPage() {
   const { workspace } = useWorkspace()
-  const navigate = useNavigate()
   const { campaignId = '' } = useParams()
+  if (!workspace || !campaignId) return null
+  return <CampaignDetail key={`${workspace.id}:${campaignId}`} workspaceId={workspace.id} campaignId={campaignId} />
+}
+
+function CampaignDetail({ workspaceId, campaignId }: { workspaceId: string; campaignId: string }) {
+  const workspace = { id: workspaceId }
+  const navigate = useNavigate()
   const [campaign, setCampaign] = useState<CampaignConfirmationDetail | null>(null)
   const [recipients, setRecipients] = useState<CampaignConfirmationRecipient[]>([])
   const [preflight, setPreflight] = useState<CampaignSendPreflight | null>(null)
   const [authorization, setAuthorization] = useState<CampaignSendAuthorization | null>(null)
-  const [dispatch, setDispatch] = useState<CampaignDispatch | null>(null)
-  const [deliveryStatus, setDeliveryStatus] = useState<CampaignDeliveryStatus | null>(null)
-  const [contractHealth, setContractHealth] = useState<DeliveryContractHealth | null>(null)
-  const [attempts, setAttempts] = useState<CampaignMessageAttempt[]>([])
   const [loading, setLoading] = useState(true)
   const [safetyBusy, setSafetyBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -38,6 +41,8 @@ export function CampaignDetailPage() {
   const [deleteBusy, setDeleteBusy] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const [now, setNow] = useState(() => new Date())
+  const { dispatch, setDispatch, deliveryStatus, contractHealth, attempts, syncError, fetching, loaded, refresh: refreshDelivery } = useCampaignLiveStatus(workspaceId, campaignId, loading || Boolean(error) || safetyBusy || recoveryBusy || deleteBusy)
+
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(new Date()), 15_000)
@@ -54,71 +59,18 @@ export function CampaignDetailPage() {
       listCampaignConfirmationRecipients(workspace.id, campaignId, 100, 0),
       getCampaignSendPreflight(workspace.id, campaignId),
       getLatestCampaignSendAuthorization(workspace.id, campaignId),
-      getCampaignDispatch(workspace.id, campaignId),
     ])
-      .then(([nextCampaign, nextRecipients, nextPreflight, nextAuthorization, nextDispatch]) => {
+      .then(([nextCampaign, nextRecipients, nextPreflight, nextAuthorization]) => {
         if (cancelled) return
         setCampaign(nextCampaign)
         setRecipients(nextRecipients)
         setPreflight(nextPreflight)
         setAuthorization(nextAuthorization)
-        setDispatch(nextDispatch)
       })
       .catch((reason) => { if (!cancelled) setError(errorMessage(reason, 'Could not load the confirmed campaign.')) })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [workspace, campaignId])
-
-  async function refreshDelivery() {
-    if (!workspace || !campaignId || !dispatch) {
-      setDeliveryStatus(null)
-      setContractHealth(null)
-      setAttempts([])
-      return
-    }
-    try {
-      const [nextStatus, nextAttempts, nextHealth] = await Promise.all([
-        getCampaignDeliveryStatus(workspace.id, campaignId),
-        listCampaignMessageAttempts(workspace.id, campaignId, 100),
-        getCampaignContractHealth(workspace.id, campaignId),
-      ])
-      setDeliveryStatus(nextStatus)
-      setAttempts(nextAttempts)
-      setContractHealth(nextHealth)
-      setDeliveryError(null)
-    } catch (reason) {
-      setDeliveryError(errorMessage(reason, 'Could not refresh SMS callback status.'))
-    }
-  }
-
-  useEffect(() => {
-    if (!workspace || !campaignId || !dispatch) {
-      setDeliveryStatus(null)
-      setContractHealth(null)
-      setAttempts([])
-      return
-    }
-    let cancelled = false
-    const poll = async () => {
-      try {
-        const [nextStatus, nextAttempts, nextHealth] = await Promise.all([
-          getCampaignDeliveryStatus(workspace.id, campaignId),
-          listCampaignMessageAttempts(workspace.id, campaignId, 100),
-          getCampaignContractHealth(workspace.id, campaignId),
-        ])
-        if (cancelled) return
-        setDeliveryStatus(nextStatus)
-        setAttempts(nextAttempts)
-        setContractHealth(nextHealth)
-        setDeliveryError(null)
-      } catch (reason) {
-        if (!cancelled) setDeliveryError(errorMessage(reason, 'Could not refresh SMS callback status.'))
-      }
-    }
-    void poll()
-    const timer = window.setInterval(() => void poll(), 5_000)
-    return () => { cancelled = true; window.clearInterval(timer) }
-  }, [workspace, campaignId, dispatch?.dispatchId])
+  }, [workspaceId, campaignId])
 
   async function requestRecovery(action: MessageRecoveryAction) {
     if (!workspace || !campaignId || !dispatch || recoveryBusy) return
@@ -159,14 +111,12 @@ export function CampaignDetailPage() {
     setSafetyBusy(true)
     setSafetyError(null)
     try {
-      const [nextPreflight, nextAuthorization, nextDispatch] = await Promise.all([
+      const [nextPreflight, nextAuthorization] = await Promise.all([
         getCampaignSendPreflight(workspace.id, campaignId),
         getLatestCampaignSendAuthorization(workspace.id, campaignId),
-        getCampaignDispatch(workspace.id, campaignId),
-      ])
+        ])
       setPreflight(nextPreflight)
       setAuthorization(nextAuthorization)
-      setDispatch(nextDispatch)
       setNow(new Date())
     } catch (reason) {
       setSafetyError(errorMessage(reason, 'Could not refresh gateway preflight.'))
@@ -273,6 +223,7 @@ export function CampaignDetailPage() {
   return (
     <div className="page-stack">
       <section className="page-heading recipient-heading"><div><p className="eyebrow">Confirmed campaign</p><h1>{campaign.title}</h1><p>Immutable execution snapshot confirmed {dateTime(campaign.confirmedAt)}. Send to Android runs the exact-SIM safety checks, authorization and durable queue handoff in one action.</p></div><div className="button-row"><Link className="secondary-button" to="/campaigns">Back to campaigns</Link><button className="danger-button" type="button" disabled={deleteBusy} onClick={() => void removeCampaign()}>{deleteBusy ? 'Deleting…' : 'Delete campaign'}</button></div></section>
+      <div role="status" className="notice"><span>{syncError || (loaded ? 'Queue and delivery status refresh automatically.' : 'Loading queue and delivery status…')}</span> <button className="secondary-button" type="button" disabled={fetching || safetyBusy || recoveryBusy || deleteBusy} onClick={refreshDelivery}>{fetching ? 'Refreshing…' : 'Refresh campaign status'}</button></div>
       {deleteError ? <div className="notice error-notice">{deleteError}</div> : null}
 
       <section className="metric-grid confirmation-metrics">
@@ -287,9 +238,9 @@ export function CampaignDetailPage() {
       <section className="panel"><div className="panel-heading"><div><p className="eyebrow">Phone &amp; SIM</p><h2>Confirmed sending identity</h2></div></div><div className="definition-grid confirmation-device-grid"><div><dt>Phone</dt><dd>{phone}</dd></div><div><dt>Selected SIM</dt><dd>{campaign.simCarrierName || campaign.simDisplayName || 'SIM'} · SIM {campaign.simSlotIndex + 1}</dd></div><div><dt>Subscription</dt><dd>{campaign.simSubscriptionId}</dd></div><div><dt>Phone last seen at confirmation</dt><dd>{dateTime(campaign.gatewayLastSeenAt)}</dd></div></div></section>
 
       <section className="panel simple-send-panel">
-        <div className="panel-heading"><div><p className="eyebrow">Simple send</p><h2>{dispatch ? 'Campaign is queued on Android' : 'Send to Android'}</h2></div><span className={`badge ${dispatch ? 'badge-success' : preflight?.ready ? 'badge-success' : 'badge-warning'}`}>{dispatch ? 'Queued' : preflight?.ready ? 'Ready' : 'Check required'}</span></div>
+        <div className="panel-heading"><div><p className="eyebrow">Simple send</p><h2>{dispatch ? 'Campaign progress' : 'Send to Android'}</h2></div><span className={`badge ${dispatch ? 'badge-success' : preflight?.ready ? 'badge-success' : 'badge-warning'}`}>{dispatch ? dispatch.status === 'downloaded' ? 'Downloaded' : dispatch.status === 'leasing' ? 'Leasing' : 'Queued' : preflight?.ready ? 'Ready' : 'Check required'}</span></div>
         {safetyError ? <div className="notice error-notice">{safetyError}</div> : null}
-        {dispatch ? <><p className="muted-copy">The durable cloud queue has been created for the exact confirmed SIM. Android 0.18 background gateway can execute newly authorized jobs automatically while the phone stays in the background; manual queue/send controls are recovery tools only.</p><p className="muted-copy">{dispatchSummary(dispatch)}</p></> : <><p className="muted-copy">One click re-runs current eligibility, phone/SIM freshness and exact SIM identity, then creates the authorized durable queue. It never falls back to another SIM.</p><div className="button-row"><button className="primary-button" type="button" disabled={safetyBusy} onClick={() => void sendToPhone()}>{safetyBusy ? 'Checking & queueing…' : 'Send to Android'}</button></div></>}
+        {dispatch ? <><p className="muted-copy">The durable cloud queue has been created for the exact confirmed SIM. Android 0.18 background gateway can execute newly authorized jobs automatically while the phone stays in the background; manual queue/send controls are recovery tools only.</p><p className="muted-copy">{dispatchSummary(dispatch)}</p></> : <><p className="muted-copy">One click re-runs current eligibility, phone/SIM freshness and exact SIM identity, then creates the authorized durable queue. It never falls back to another SIM.</p><div className="button-row"><button className="primary-button" type="button" disabled={safetyBusy || !loaded} onClick={() => void sendToPhone()}>{safetyBusy ? 'Checking & queueing…' : 'Send to Android'}</button></div></>}
         <details className="advanced-send-details"><summary>Advanced send controls</summary><p className="muted-copy">The detailed preflight, authorization and queue panels below remain available for diagnostics and recovery.</p></details>
       </section>
 
@@ -315,7 +266,7 @@ export function CampaignDetailPage() {
         {authorization ? <div className="definition-grid confirmation-device-grid"><div><dt>Authorized at</dt><dd>{dateTime(authorization.authorizedAt)}</dd></div><div><dt>Expires at</dt><dd>{dateTime(authorization.expiresAt)}</dd></div><div><dt>Exact subscription</dt><dd>{authorization.simSubscriptionId}</dd></div><div><dt>Exact SIM slot</dt><dd>SIM {authorization.simSlotIndex + 1}</dd></div></div> : <p className="muted-copy">No send authorization has been issued for this campaign.</p>}
         <p className="muted-copy">Authorization lasts 5 minutes and can be revoked. It is not a queue job and it does not instruct Android to send SMS.</p>
         <div className="button-row">
-          <button className="primary-button" type="button" disabled={safetyBusy || Boolean(dispatch) || !canAuthorizeCampaign(preflight, authorization, now)} onClick={() => void authorize()}>{safetyBusy ? 'Working…' : 'Authorize send'}</button>
+          <button className="primary-button" type="button" disabled={safetyBusy || !loaded || Boolean(dispatch) || !canAuthorizeCampaign(preflight, authorization, now)} onClick={() => void authorize()}>{safetyBusy ? 'Working…' : 'Authorize send'}</button>
           {activeAuthorization ? <button className="danger-button" type="button" disabled={safetyBusy} onClick={() => void revoke()}>Revoke authorization</button> : null}
         </div>
       </section>
@@ -332,7 +283,7 @@ export function CampaignDetailPage() {
           <div className="definition-grid confirmation-device-grid"><div><dt>Enqueued</dt><dd>{dateTime(dispatch.enqueuedAt)}</dd></div><div><dt>Exact subscription</dt><dd>{dispatch.simSubscriptionId}</dd></div><div><dt>Exact SIM slot</dt><dd>SIM {dispatch.simSlotIndex + 1}</dd></div><div><dt>Estimated SMS units</dt><dd>{dispatch.estimatedSmsUnits.toLocaleString()}</dd></div></div>
         </> : <>
           <p className="muted-copy">Queue creation atomically consumes a fresh authorization, re-runs server preflight, and creates one immutable job per confirmed recipient. Duplicate campaign enqueue is prevented by the database.</p>
-          <div className="button-row"><button className="primary-button" type="button" disabled={safetyBusy || !canCreateDurableQueue(authorization, dispatch, now)} onClick={() => void createQueue()}>{safetyBusy ? 'Working…' : 'Create durable queue'}</button></div>
+          <div className="button-row"><button className="primary-button" type="button" disabled={safetyBusy || !loaded || !canCreateDurableQueue(authorization, dispatch, now)} onClick={() => void createQueue()}>{safetyBusy ? 'Working…' : 'Create durable queue'}</button></div>
         </>}
       </section>
 
@@ -357,7 +308,7 @@ export function CampaignDetailPage() {
           {deliveryStatus.recoveryRequestedJobs > 0 ? <div className="notice warning-notice"><strong>Recovery queued.</strong> {deliveryStatus.recoveryRequestedJobs.toLocaleString()} request{deliveryStatus.recoveryRequestedJobs === 1 ? '' : 's'} waiting for the paired Android gateway.</div> : null}
           <div className="button-row">
             {deliveryStatus.unresolvedUnknownJobs > 0 ? <button className="secondary-button" type="button" disabled={recoveryBusy} onClick={() => void requestRecovery('skip_unknown')}>{recoveryBusy ? 'Working…' : `Continue without resending ${deliveryStatus.unresolvedUnknownJobs} UNKNOWN`}</button> : null}
-            <button className="secondary-button" type="button" disabled={recoveryBusy} onClick={() => void refreshDelivery()}>Refresh callbacks</button>
+
           </div>
         </> : <p className="muted-copy">No Android attempt has been registered yet. Android 0.18 registers every attempt in cloud before calling SmsManager.</p>}
 
