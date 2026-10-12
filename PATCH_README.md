@@ -1,5 +1,5 @@
-# Web 0.18.7-r2 — Mobile Bottom Navigation Refinement
+# Web 0.18.8 — PWA Installation, Service Worker & Offline Safety
 
-Current patch documentation: `PATCH_0_18_7_R2_README.md`.
+Current patch documentation: `PATCH_0_18_8_README.md`.
 
-Frontend version is `0.18.7-r2`. Backend contract remains `0.18.5`; no database migration is included. This patch changes mobile navigation/presentation only and preserves the validated Web 0.18.7 campaign reliability contracts.
+Frontend version is `0.18.8`. Backend contract remains `0.18.5`; no database migration is included. This release adds installability and safe offline app-shell behavior without changing SMS send, queue, callback, retry, UNKNOWN/no-resend or exact-SIM contracts.

@@ -11,6 +11,7 @@ import { useOperationGuard } from '../lib/useOperationGuard'
 import { useAuth } from '../auth/AuthProvider'
 import { campaignDraftKey, readCampaignDraft, removeCampaignDraft } from '../lib/campaignDraftStorage'
 import { useWorkspace } from '../workspace/WorkspaceProvider'
+import { usePwa } from '../pwa/PwaProvider'
 
 function dateTime(value: string | null) {
   if (!value) return 'Never'
@@ -32,6 +33,7 @@ function CampaignReview() {
   const navigate = useNavigate()
   const { user } = useAuth()
   const operation = useOperationGuard()
+  const { online } = usePwa()
   const [reload, setReload] = useState(0)
   const [selectedDeviceId, setSelectedDeviceId] = useState('')
   const [draft, setDraft] = useState<MessageComposerDraft | null>(null)
@@ -73,7 +75,7 @@ function CampaignReview() {
   const previews = useMemo(() => usage.recipients.filter((item) => item.estimate).slice(0, 10), [usage])
 
   async function confirm() {
-    if (!workspace || !draft || !activeDevice || !readiness.ready) return
+    if (!workspace || !draft || !activeDevice || !readiness.ready || !online) return
     if (!window.confirm('Confirm this campaign? The recipients, personalized messages, estimated SMS units, phone and selected SIM will be frozen and cannot be edited.')) return
     if (!operation.start()) return
     setBusy(true)
@@ -97,7 +99,7 @@ function CampaignReview() {
 
   if (!workspace) return null
   if (loading) return <LoadingState label="Preparing campaign review…" />
-  if (!draft) return <div className="page-stack">{error ? <div role="alert" className="notice error-notice">{error}</div> : <EmptyState title="Draft not found">Choose a saved message draft before reviewing a campaign.</EmptyState>}<div className="button-row"><button type="button" className="secondary-button" onClick={() => setReload((value) => value + 1)}>Retry review</button><Link to="/composer">Open saved drafts</Link></div></div>
+  if (!draft) return <div className="page-stack">{error ? <div role="alert" className="notice error-notice">{error}</div> : <EmptyState title="Draft not found">Choose a saved message draft before reviewing a campaign.</EmptyState>}<div className="button-row"><button type="button" className="secondary-button" disabled={!online} onClick={() => setReload((value) => value + 1)}>Retry review</button><Link to="/composer">Open saved drafts</Link></div></div>
 
   const localKey = user ? campaignDraftKey(user.id, workspace.id) : null
   const editUrl = localKey && readCampaignDraft(localKey)?.draftId === draft.draftId
@@ -114,6 +116,7 @@ function CampaignReview() {
       </section>
 
       {error ? <div className="notice error-notice">{error}</div> : null}
+      {!online ? <div className="notice warning-notice"><strong>Reconnect to confirm.</strong> Campaign review can stay open offline, but confirmation requires fresh server and Phone &amp; SIM checks.</div> : null}
       {!readiness.ready ? <div className="notice warning-notice"><strong>Confirmation is blocked.</strong><ul className="confirmation-blockers">{readiness.blockers.map((item) => <li key={item}>{item}</li>)}</ul></div> : null}
 
       <section className="metric-grid confirmation-metrics">
@@ -157,7 +160,7 @@ function CampaignReview() {
 
       <section className="panel confirmation-action-panel">
         <div><p className="eyebrow">Immutable confirmation</p><h2>Freeze this campaign</h2><p className="muted-copy">After confirmation, edits to the source file, recipient preparation or message draft do not change this campaign snapshot. Confirmation itself sends nothing; the next screen performs the exact-SIM Web → Android handoff.</p></div>
-        <button className="primary-button" type="button" disabled={!readiness.ready || busy} onClick={() => void confirm()}>{busy ? 'Confirming…' : 'Confirm campaign'}</button>
+        <button className="primary-button" type="button" disabled={!online || !readiness.ready || busy} onClick={() => void confirm()}>{busy ? 'Confirming…' : 'Confirm campaign'}</button>
       </section>
     </div>
   )

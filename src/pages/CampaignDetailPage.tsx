@@ -12,6 +12,7 @@ import { errorMessage } from '../lib/errors'
 import { authorizationIsActive, canAuthorizeCampaign, preflightSummary, type CampaignSendAuthorization, type CampaignSendPreflight } from '../lib/gatewayPreflight'
 import { authorizeCampaignSend, getCampaignSendPreflight, getLatestCampaignSendAuthorization, revokeCampaignSendAuthorization } from '../lib/gatewayPreflightApi'
 import { useWorkspace } from '../workspace/WorkspaceProvider'
+import { usePwa } from '../pwa/PwaProvider'
 
 function dateTime(value: string | null) {
   if (!value) return 'Never'
@@ -28,6 +29,7 @@ export function CampaignDetailPage() {
 function CampaignDetail({ workspaceId, campaignId }: { workspaceId: string; campaignId: string }) {
   const workspace = { id: workspaceId }
   const navigate = useNavigate()
+  const { online } = usePwa()
   const [campaign, setCampaign] = useState<CampaignConfirmationDetail | null>(null)
   const [recipients, setRecipients] = useState<CampaignConfirmationRecipient[]>([])
   const [preflight, setPreflight] = useState<CampaignSendPreflight | null>(null)
@@ -73,7 +75,7 @@ function CampaignDetail({ workspaceId, campaignId }: { workspaceId: string; camp
   }, [workspaceId, campaignId])
 
   async function requestRecovery(action: MessageRecoveryAction) {
-    if (!workspace || !campaignId || !dispatch || recoveryBusy) return
+    if (!online || !workspace || !campaignId || !dispatch || recoveryBusy) return
     const message = 'Resolve all current UNKNOWN jobs without resending them? This clears the Android safety pause so remaining jobs can continue, but the UNKNOWN recipients will not be sent again.'
     if (!window.confirm(message)) return
     setRecoveryBusy(true)
@@ -92,7 +94,7 @@ function CampaignDetail({ workspaceId, campaignId }: { workspaceId: string; camp
   }
 
   async function removeCampaign() {
-    if (!workspace || !campaignId || !campaign || deleteBusy) return
+    if (!online || !workspace || !campaignId || !campaign || deleteBusy) return
     if (!window.confirm(`Delete “${campaign.title}” from campaign history?\n\nBulkText will refuse deletion while Android has in-flight/downloaded work, unresolved UNKNOWN, pending recovery, or callbacks that are not safely terminal.`)) return
     setDeleteBusy(true)
     setDeleteError(null)
@@ -107,7 +109,7 @@ function CampaignDetail({ workspaceId, campaignId }: { workspaceId: string; camp
   }
 
   async function refreshSafety() {
-    if (!workspace || !campaignId) return
+    if (!online || !workspace || !campaignId) return
     setSafetyBusy(true)
     setSafetyError(null)
     try {
@@ -126,7 +128,7 @@ function CampaignDetail({ workspaceId, campaignId }: { workspaceId: string; camp
   }
 
   async function authorize() {
-    if (!workspace || !campaignId || dispatch || !canAuthorizeCampaign(preflight, authorization, now)) return
+    if (!online || !workspace || !campaignId || dispatch || !canAuthorizeCampaign(preflight, authorization, now)) return
     if (!window.confirm('Authorize this confirmed campaign for 5 minutes? This phase does not queue or send any SMS.')) return
     setSafetyBusy(true)
     setSafetyError(null)
@@ -144,7 +146,7 @@ function CampaignDetail({ workspaceId, campaignId }: { workspaceId: string; camp
   }
 
   async function revoke() {
-    if (!workspace || !campaignId || !authorization || !authorizationIsActive(authorization, now)) return
+    if (!online || !workspace || !campaignId || !authorization || !authorizationIsActive(authorization, now)) return
     if (!window.confirm('Revoke this send authorization? No SMS has been queued or sent by this phase.')) return
     setSafetyBusy(true)
     setSafetyError(null)
@@ -162,7 +164,7 @@ function CampaignDetail({ workspaceId, campaignId }: { workspaceId: string; camp
 
 
   async function createQueue() {
-    if (!workspace || !campaignId || !authorization || !canCreateDurableQueue(authorization, dispatch, now)) return
+    if (!online || !workspace || !campaignId || !authorization || !canCreateDurableQueue(authorization, dispatch, now)) return
     if (!window.confirm('Create the durable cloud queue from this immutable campaign snapshot? This still does not send any SMS.')) return
     setSafetyBusy(true)
     setSafetyError(null)
@@ -183,7 +185,7 @@ function CampaignDetail({ workspaceId, campaignId }: { workspaceId: string; camp
 
 
   async function sendToPhone() {
-    if (!workspace || !campaignId || dispatch) return
+    if (!online || !workspace || !campaignId || dispatch) return
     if (!window.confirm('Send this confirmed campaign through the paired Android gateway? BulkText will re-run exact-SIM preflight, create the durable queue, and the enabled Android 0.18 background gateway will execute it without requiring you to return to the phone.')) return
     setSafetyBusy(true)
     setSafetyError(null)
@@ -222,8 +224,9 @@ function CampaignDetail({ workspaceId, campaignId }: { workspaceId: string; camp
 
   return (
     <div className="page-stack">
-      <section className="page-heading recipient-heading"><div><p className="eyebrow">Confirmed campaign</p><h1>{campaign.title}</h1><p>Immutable execution snapshot confirmed {dateTime(campaign.confirmedAt)}. Send to Android runs the exact-SIM safety checks, authorization and durable queue handoff in one action.</p></div><div className="button-row"><Link className="secondary-button" to="/campaigns">Back to campaigns</Link><button className="danger-button" type="button" disabled={deleteBusy} onClick={() => void removeCampaign()}>{deleteBusy ? 'Deleting…' : 'Delete campaign'}</button></div></section>
-      <div role="status" className="notice"><span>{syncError || (loaded ? 'Queue and delivery status refresh automatically.' : 'Loading queue and delivery status…')}</span> <button className="secondary-button" type="button" disabled={fetching || safetyBusy || recoveryBusy || deleteBusy} onClick={refreshDelivery}>{fetching ? 'Refreshing…' : 'Refresh campaign status'}</button></div>
+      <section className="page-heading recipient-heading"><div><p className="eyebrow">Confirmed campaign</p><h1>{campaign.title}</h1><p>Immutable execution snapshot confirmed {dateTime(campaign.confirmedAt)}. Send to Android runs the exact-SIM safety checks, authorization and durable queue handoff in one action.</p></div><div className="button-row"><Link className="secondary-button" to="/campaigns">Back to campaigns</Link><button className="danger-button" type="button" disabled={deleteBusy || !online} onClick={() => void removeCampaign()}>{deleteBusy ? 'Deleting…' : 'Delete campaign'}</button></div></section>
+      {!online ? <div className="notice warning-notice"><strong>Offline safety mode.</strong> Last loaded campaign information may remain visible, but live status, authorization, queueing, recovery and sending are disabled until you reconnect.</div> : null}
+      <div role="status" className="notice"><span>{syncError || (loaded ? 'Queue and delivery status refresh automatically.' : 'Loading queue and delivery status…')}</span> <button className="secondary-button" type="button" disabled={!online || fetching || safetyBusy || recoveryBusy || deleteBusy} onClick={refreshDelivery}>{fetching ? 'Refreshing…' : 'Refresh campaign status'}</button></div>
       {deleteError ? <div className="notice error-notice">{deleteError}</div> : null}
 
       <section className="metric-grid confirmation-metrics">
@@ -251,7 +254,7 @@ function CampaignDetail({ workspaceId, campaignId }: { workspaceId: string; camp
             <div><span>UNKNOWN</span><strong>{deliveryStatus ? deliveryStatus.unresolvedUnknownJobs.toLocaleString() : '—'}</strong><small>Never auto-retried</small></div>
           </div>
           <p className="muted-copy">{dispatchSummary(dispatch)}</p>
-        </> : <><p className="muted-copy">One action re-runs current eligibility, phone/SIM freshness and exact SIM identity, then creates the authorized durable queue. It never falls back to another SIM.</p><div className="button-row"><button className="primary-button" type="button" disabled={safetyBusy || !loaded} onClick={() => void sendToPhone()}>{safetyBusy ? 'Checking & queueing…' : 'Send to Android'}</button></div></>}
+        </> : <><p className="muted-copy">One action re-runs current eligibility, phone/SIM freshness and exact SIM identity, then creates the authorized durable queue. It never falls back to another SIM.</p><div className="button-row"><button className="primary-button" type="button" disabled={!online || safetyBusy || !loaded} onClick={() => void sendToPhone()}>{safetyBusy ? 'Checking & queueing…' : 'Send to Android'}</button></div></>}
         <p className="technical-details-hint">Preflight, authorization and queue diagnostics are available under Technical send details below.</p>
       </section>
 
@@ -271,7 +274,7 @@ function CampaignDetail({ workspaceId, campaignId }: { workspaceId: string; camp
           <p className="muted-copy">{preflightSummary(preflight)}</p>
           {preflight && !preflight.ready ? <div className="notice warning-notice"><strong>Authorization is blocked.</strong><ul className="confirmation-blockers">{preflight.blockers.map((blocker, index) => <li key={`${preflight.blockerCodes[index] ?? 'blocker'}-${index}`}>{blocker}</li>)}</ul></div> : null}
           {preflight?.ready ? <div className="definition-grid confirmation-device-grid"><div><dt>Current eligible recipients</dt><dd>{preflight.currentEligibleRecipients.toLocaleString()}</dd></div><div><dt>Phone last seen</dt><dd>{dateTime(preflight.deviceLastSeenAt)}</dd></div><div><dt>Inventory refreshed</dt><dd>{dateTime(preflight.inventoryLastSeenAt)}</dd></div><div><dt>Credential expires</dt><dd>{dateTime(preflight.credentialExpiresAt)}</dd></div></div> : null}
-          <div className="button-row"><button className="secondary-button" type="button" disabled={safetyBusy} onClick={() => void refreshSafety()}>{safetyBusy ? 'Checking…' : 'Refresh preflight'}</button></div>
+          <div className="button-row"><button className="secondary-button" type="button" disabled={!online || safetyBusy} onClick={() => void refreshSafety()}>{safetyBusy ? 'Checking…' : 'Refresh preflight'}</button></div>
         </>}
       </section>
 
@@ -281,8 +284,8 @@ function CampaignDetail({ workspaceId, campaignId }: { workspaceId: string; camp
         {authorization ? <div className="definition-grid confirmation-device-grid"><div><dt>Authorized at</dt><dd>{dateTime(authorization.authorizedAt)}</dd></div><div><dt>Expires at</dt><dd>{dateTime(authorization.expiresAt)}</dd></div><div><dt>Exact subscription</dt><dd>{authorization.simSubscriptionId}</dd></div><div><dt>Exact SIM slot</dt><dd>SIM {authorization.simSlotIndex + 1}</dd></div></div> : <p className="muted-copy">No send authorization has been issued for this campaign.</p>}
         <p className="muted-copy">Authorization lasts 5 minutes and can be revoked. It is not a queue job and it does not instruct Android to send SMS.</p>
         <div className="button-row">
-          <button className="primary-button" type="button" disabled={safetyBusy || !loaded || Boolean(dispatch) || !canAuthorizeCampaign(preflight, authorization, now)} onClick={() => void authorize()}>{safetyBusy ? 'Working…' : 'Authorize send'}</button>
-          {activeAuthorization ? <button className="danger-button" type="button" disabled={safetyBusy} onClick={() => void revoke()}>Revoke authorization</button> : null}
+          <button className="primary-button" type="button" disabled={!online || safetyBusy || !loaded || Boolean(dispatch) || !canAuthorizeCampaign(preflight, authorization, now)} onClick={() => void authorize()}>{safetyBusy ? 'Working…' : 'Authorize send'}</button>
+          {activeAuthorization ? <button className="danger-button" type="button" disabled={!online || safetyBusy} onClick={() => void revoke()}>Revoke authorization</button> : null}
         </div>
       </section>
 
@@ -298,7 +301,7 @@ function CampaignDetail({ workspaceId, campaignId }: { workspaceId: string; camp
           <div className="definition-grid confirmation-device-grid"><div><dt>Enqueued</dt><dd>{dateTime(dispatch.enqueuedAt)}</dd></div><div><dt>Exact subscription</dt><dd>{dispatch.simSubscriptionId}</dd></div><div><dt>Exact SIM slot</dt><dd>SIM {dispatch.simSlotIndex + 1}</dd></div><div><dt>Estimated SMS units</dt><dd>{dispatch.estimatedSmsUnits.toLocaleString()}</dd></div></div>
         </> : <>
           <p className="muted-copy">Queue creation atomically consumes a fresh authorization, re-runs server preflight, and creates one immutable job per confirmed recipient. Duplicate campaign enqueue is prevented by the database.</p>
-          <div className="button-row"><button className="primary-button" type="button" disabled={safetyBusy || !loaded || !canCreateDurableQueue(authorization, dispatch, now)} onClick={() => void createQueue()}>{safetyBusy ? 'Working…' : 'Create durable queue'}</button></div>
+          <div className="button-row"><button className="primary-button" type="button" disabled={!online || safetyBusy || !loaded || !canCreateDurableQueue(authorization, dispatch, now)} onClick={() => void createQueue()}>{safetyBusy ? 'Working…' : 'Create durable queue'}</button></div>
         </>}
       </section>
         </div>
@@ -324,7 +327,7 @@ function CampaignDetail({ workspaceId, campaignId }: { workspaceId: string; camp
           </div>
           {deliveryStatus.recoveryRequestedJobs > 0 ? <div className="notice warning-notice"><strong>Recovery queued.</strong> {deliveryStatus.recoveryRequestedJobs.toLocaleString()} request{deliveryStatus.recoveryRequestedJobs === 1 ? '' : 's'} waiting for the paired Android gateway.</div> : null}
           <div className="button-row">
-            {deliveryStatus.unresolvedUnknownJobs > 0 ? <button className="secondary-button" type="button" disabled={recoveryBusy} onClick={() => void requestRecovery('skip_unknown')}>{recoveryBusy ? 'Working…' : `Continue without resending ${deliveryStatus.unresolvedUnknownJobs} UNKNOWN`}</button> : null}
+            {deliveryStatus.unresolvedUnknownJobs > 0 ? <button className="secondary-button" type="button" disabled={!online || recoveryBusy} onClick={() => void requestRecovery('skip_unknown')}>{recoveryBusy ? 'Working…' : `Continue without resending ${deliveryStatus.unresolvedUnknownJobs} UNKNOWN`}</button> : null}
 
           </div>
         </> : <p className="muted-copy">No Android attempt has been registered yet. Android 0.18 registers every attempt in cloud before calling SmsManager.</p>}

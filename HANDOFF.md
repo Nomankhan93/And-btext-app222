@@ -1,7 +1,18 @@
-# BulkText handoff — Web 0.18.7-r2
+# BulkText handoff — Web 0.18.8
 
-Current frontend release is Web `0.18.7-r2`, a narrow mobile navigation refinement over the validated 0.18.7 Mobile UI/UX release. Mobile uses Home / Campaigns / Phone & SIM / Tools bottom navigation; Tools expands to Recipient imports, Consent / do-not-send, Message drafts and Settings. Desktop keeps the sidebar.
+Current frontend release is Web `0.18.8`, built over `0.18.7-r2`.
 
-Backend contract remains `0.18.5`; Supabase migrations, queue/delivery/recovery contracts, exact SIM binding and Android behavior are unchanged.
+This release adds:
+- installable PWA manifest, app icons, favicons and Apple touch icon;
+- production-only service-worker registration;
+- cached app shell plus hashed Vite JS/CSS/static assets for offline reopening;
+- global offline and controlled update notices;
+- browser-driven Install BulkText UX on Dashboard/Settings;
+- offline blocking for campaign confirmation, Send to Android, send authorization, durable queue creation, recovery, Phone & SIM mutations and profile save;
+- explicit reconnect state when an authenticated workspace cannot be loaded offline.
 
-Read `PATCH_0_18_7_R2_README.md`, `VALIDATION_0_18_7_R2.md` and `CHANGED_FILES_0_18_7_R2.txt`. PWA/service-worker/offline caching remains planned for Web 0.18.8.
+Safety boundary: Supabase/auth/API data, exact-SIM status, queue/delivery state, callbacks and mutations are never cached or replayed by the service worker. There is no offline send queue or Background Sync.
+
+Backend contract remains `0.18.5`. No Supabase migration or Android change is included.
+
+Read `PATCH_0_18_8_README.md`, `VALIDATION_0_18_8.md` and `CHANGED_FILES_0_18_8.txt` before applying/committing.

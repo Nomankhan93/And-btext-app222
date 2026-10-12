@@ -778,3 +778,65 @@ details > summary {
   .campaign-card-list { display: grid; gap: 12px; margin-top: 16px; }
   .campaign-table-view { display: none; }
 }
+
+/* 0.18.8 — PWA install, update and offline safety */
+.pwa-status-region {
+  position: sticky;
+  top: 72px;
+  z-index: 28;
+}
+
+.pwa-status-banner {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 9px 18px;
+  border-bottom: 1px solid;
+  font-size: .86rem;
+  line-height: 1.4;
+}
+
+.pwa-status-banner strong { white-space: nowrap; }
+.pwa-offline-banner { background: #fff7ed; color: #9a3412; border-color: #fed7aa; }
+.pwa-update-banner { justify-content: space-between; background: #effcf9; color: #155e59; border-color: #b9e8df; }
+.pwa-update-banner > div:first-child { display: grid; gap: 2px; }
+.pwa-status-actions { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+.pwa-status-actions .primary-button,
+.pwa-status-actions .secondary-button { min-height: 44px; }
+
+.pwa-install-card { display: grid; gap: 18px; }
+.pwa-install-brand { display: flex; align-items: flex-start; gap: 16px; min-width: 0; }
+.pwa-install-brand img { width: 72px; height: 72px; flex: 0 0 72px; border-radius: 18px; object-fit: cover; }
+.pwa-install-brand h2 { margin: 5px 0 7px; font-size: 1.2rem; }
+.pwa-install-brand p:last-child { margin: 0; color: var(--muted); line-height: 1.5; }
+.pwa-install-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.pwa-install-actions .primary-button,
+.pwa-install-actions .secondary-button { min-height: 44px; }
+.pwa-install-message { margin: 0; }
+.pwa-install-card-compact { grid-template-columns: minmax(0,1fr) auto; align-items: center; }
+.pwa-install-card-compact .pwa-install-brand img { width: 58px; height: 58px; flex-basis: 58px; border-radius: 15px; }
+.pwa-install-card-compact .pwa-install-actions { justify-content: flex-end; }
+
+@media (display-mode: standalone) {
+  body { overscroll-behavior-y: none; }
+}
+
+@media (max-width: 700px) {
+  .pwa-status-banner { align-items: flex-start; flex-direction: column; gap: 5px; padding: 10px 14px; }
+  .pwa-status-banner strong { white-space: normal; }
+  .pwa-update-banner { gap: 10px; }
+  .pwa-status-actions { width: 100%; }
+  .pwa-status-actions > * { flex: 1 1 0; }
+  .pwa-install-card-compact { grid-template-columns: 1fr; }
+  .pwa-install-card-compact .pwa-install-actions { justify-content: stretch; }
+  .pwa-install-card-compact .pwa-install-actions .primary-button { width: 100%; }
+}
+
+@media (max-width: 560px) {
+  .pwa-install-brand img { width: 58px; height: 58px; flex-basis: 58px; border-radius: 15px; }
+  .pwa-install-actions { align-items: stretch; flex-direction: column; }
+  .pwa-install-actions .primary-button,
+  .pwa-install-actions .secondary-button { width: 100%; }
+}

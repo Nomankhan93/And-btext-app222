@@ -7,6 +7,7 @@ import { listContactImports, type ContactImportSummary } from '../lib/importsApi
 import { listMessageComposerDrafts, listMessageComposerSources, type MessageComposerDraft, type MessageComposerSource } from '../lib/messageComposerApi'
 import { workflowRoutes } from '../lib/productNavigation'
 import { useWorkspace } from '../workspace/WorkspaceProvider'
+import { PwaInstallCard } from '../components/PwaStatus'
 
 interface DashboardData {
   devices: GatewayDeviceSummary[]
@@ -80,6 +81,8 @@ export function DashboardPage() {
       </section>
 
       {loadError ? <section role="alert" className="notice warning-notice">{loadError}</section> : null}
+
+      <PwaInstallCard compact />
 
       <section className="panel dashboard-next-action" aria-labelledby="dashboard-next-title">
         <div>

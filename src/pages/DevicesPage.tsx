@@ -17,6 +17,7 @@ import {
 import { useGatewayLiveStatus } from '../lib/useGatewayLiveStatus'
 import { formatPairingCode } from '../lib/pairingQr'
 import { useWorkspace } from '../workspace/WorkspaceProvider'
+import { usePwa } from '../pwa/PwaProvider'
 
 function dateTime(value: string | null) {
   if (!value) return 'Never'
@@ -41,6 +42,7 @@ export function DevicesPage() {
 }
 
 function DeviceWorkspace({ workspace }: { workspace: { id: string } }) {
+  const { online } = usePwa()
   const [pairing, setPairing] = useState<CreatedGatewayPairing | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -62,7 +64,7 @@ function DeviceWorkspace({ workspace }: { workspace: { id: string } }) {
   }, [sessions, pairing])
 
   async function generatePairing() {
-    if (!workspace || !canManage) return
+    if (!online || !workspace || !canManage) return
     setBusy(true)
     setError(null)
     setMessage(null)
@@ -78,7 +80,7 @@ function DeviceWorkspace({ workspace }: { workspace: { id: string } }) {
   }
 
   async function cancelPairing() {
-    if (!pairing) return
+    if (!online || !pairing) return
     setBusy(true)
     setError(null)
     try {
@@ -102,7 +104,7 @@ function DeviceWorkspace({ workspace }: { workspace: { id: string } }) {
   }
 
   async function bindSim(device: GatewayDeviceSummary, sim: GatewaySimSummary) {
-    if (!workspace || !canManage || !sim.present) return
+    if (!online || !workspace || !canManage || !sim.present) return
     setBusy(true)
     setError(null)
     setMessage(null)
@@ -117,7 +119,7 @@ function DeviceWorkspace({ workspace }: { workspace: { id: string } }) {
   }
 
   async function unbindSim(device: GatewayDeviceSummary) {
-    if (!workspace || !canManage || !device.boundSimId) return
+    if (!online || !workspace || !canManage || !device.boundSimId) return
     setBusy(true)
     setError(null)
     setMessage(null)
@@ -132,7 +134,7 @@ function DeviceWorkspace({ workspace }: { workspace: { id: string } }) {
   }
 
   async function revokeDevice(device: GatewayDeviceSummary) {
-    if (!workspace || !canManage) return
+    if (!online || !workspace || !canManage) return
     const confirmed = window.confirm(`Disconnect ${device.displayName}? This phone will no longer be able to use BulkText.`)
     if (!confirmed) return
     setBusy(true)
@@ -158,10 +160,11 @@ function DeviceWorkspace({ workspace }: { workspace: { id: string } }) {
           <h1>Phone &amp; SIM</h1>
           <p>Connect your Android phone and explicitly choose the SIM BulkText may use. If that SIM is removed or changed, sending remains blocked until you select a SIM again.</p>
         </div>
-        <button className="secondary-button" type="button" disabled={fetching || busy} onClick={() => void refresh()}>Refresh</button>
+        <button className="secondary-button" type="button" disabled={!online || fetching || busy} onClick={() => void refresh()}>Refresh</button>
       </section>
 
       <p className="muted-copy" role="status">{syncError ?? 'Phone and SIM details refresh automatically while this page is visible.'}</p>
+      {!online ? <div className="notice warning-notice"><strong>Offline.</strong> Pairing, SIM selection, disconnect and live refresh are disabled until you reconnect.</div> : null}
       {error ? <ErrorState title="Device operation failed">{error}</ErrorState> : null}
       {message ? <div className="notice success-notice">{message}</div> : null}
 
@@ -175,7 +178,7 @@ function DeviceWorkspace({ workspace }: { workspace: { id: string } }) {
         <section className="panel">
           <div className="panel-heading">
             <div><p className="eyebrow">Pair phone</p><h2>Connect my Android phone</h2></div>
-            {!pairing ? <button className="primary-button" type="button" disabled={busy} onClick={() => void generatePairing()}>Generate pairing code</button> : null}
+            {!pairing ? <button className="primary-button" type="button" disabled={!online || busy} onClick={() => void generatePairing()}>Generate pairing code</button> : null}
           </div>
           <p className="muted-copy">The pairing code can be used once. After your phone connects, choose exactly which SIM BulkText may use.</p>
 
@@ -189,7 +192,7 @@ function DeviceWorkspace({ workspace }: { workspace: { id: string } }) {
                 <div className="button-row">
                   <button className="secondary-button" type="button" onClick={() => void copy(pairing.pairingCode, 'Pairing code')}>Copy code</button>
                   <button className="secondary-button" type="button" onClick={() => void copy(pairing.pairingUri, 'Pairing URI')}>Copy pairing URI</button>
-                  <button className="danger-button" type="button" disabled={busy} onClick={() => void cancelPairing()}>Revoke code</button>
+                  <button className="danger-button" type="button" disabled={!online || busy} onClick={() => void cancelPairing()}>Revoke code</button>
                 </div>
                 <div className="notice warning-notice">The raw code is shown only in this browser state. Refreshing the page does not reveal it again.</div>
               </div>
@@ -244,7 +247,7 @@ function DeviceWorkspace({ workspace }: { workspace: { id: string } }) {
                             </div>
                             <div className="sim-row-actions">
                               {selected ? <span className={`badge ${sim.present ? 'badge-success' : 'badge-warning'}`}>{sim.present ? 'Bound' : 'Missing'}</span> : null}
-                              {!selected && sim.present && device.status === 'active' && canManage ? <button className="secondary-button compact-button" type="button" disabled={busy} onClick={() => void bindSim(device, sim)}>Use this SIM</button> : null}
+                              {!selected && sim.present && device.status === 'active' && canManage ? <button className="secondary-button compact-button" type="button" disabled={!online || busy} onClick={() => void bindSim(device, sim)}>Use this SIM</button> : null}
                             </div>
                           </div>
                         )
@@ -256,8 +259,8 @@ function DeviceWorkspace({ workspace }: { workspace: { id: string } }) {
                 <footer className="device-card-footer">
                   <span>Paired {dateTime(device.pairedAt)} · Last seen {dateTime(device.lastSeenAt)}</span>
                   <div className="button-row device-actions">
-                    {device.boundSimId && canManage ? <button className="secondary-button compact-button" type="button" disabled={busy} onClick={() => void unbindSim(device)}>Clear SIM</button> : null}
-                    {device.status === 'active' && canManage ? <button className="danger-button" type="button" disabled={busy} onClick={() => void revokeDevice(device)}>Disconnect phone</button> : null}
+                    {device.boundSimId && canManage ? <button className="secondary-button compact-button" type="button" disabled={!online || busy} onClick={() => void unbindSim(device)}>Clear SIM</button> : null}
+                    {device.status === 'active' && canManage ? <button className="danger-button" type="button" disabled={!online || busy} onClick={() => void revokeDevice(device)}>Disconnect phone</button> : null}
                   </div>
                 </footer>
               </article>

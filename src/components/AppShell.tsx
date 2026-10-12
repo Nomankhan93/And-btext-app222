@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthProvider'
 import { mobilePrimaryNavigation, primaryNavigation, secondaryNavigation } from '../lib/productNavigation'
+import { PwaStatusRegion } from './PwaStatus'
 
 type MobileIconKind = 'home' | 'campaigns' | 'phone' | 'tools'
 
@@ -84,6 +85,8 @@ export function AppShell() {
           </div>
         </div>
       </header>
+
+      <PwaStatusRegion />
 
       <div className="shell-body">
         <aside className="sidebar" aria-label="Application navigation">

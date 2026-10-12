@@ -1,25 +1,28 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { useAuth } from '../auth/AuthProvider'
 import { ErrorState } from '../components/StateViews'
+import { PwaInstallCard } from '../components/PwaStatus'
 import { supabase } from '../lib/supabase'
+import { usePwa } from '../pwa/PwaProvider'
 
 export function SettingsPage() {
   const { user } = useAuth()
+  const { online } = usePwa()
   const [displayName, setDisplayName] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
-    if (!supabase || !user) return
+    if (!supabase || !user || !online) return
     void supabase.from('profiles').select('display_name').eq('id', user.id).single().then(({ data }) => {
       if (data?.display_name) setDisplayName(data.display_name as string)
     })
-  }, [user])
+  }, [user, online])
 
   async function saveProfile(event: FormEvent) {
     event.preventDefault()
-    if (!supabase || !user) return
+    if (!supabase || !user || !online) return
     setBusy(true)
     setError(null)
     setMessage(null)
@@ -35,12 +38,15 @@ export function SettingsPage() {
       {error ? <ErrorState title="Update failed">{error}</ErrorState> : null}
       {message ? <div className="notice success-notice">{message}</div> : null}
 
+      <PwaInstallCard />
+
       <section className="panel">
         <div className="panel-heading"><div><p className="eyebrow">Profile</p><h2>Your account profile</h2></div></div>
         <form className="form-stack narrow-form" onSubmit={saveProfile}>
           <label>Email<input value={user?.email ?? ''} disabled aria-readonly="true" /><small>Your sign-in email is managed by your account authentication.</small></label>
           <label>Display name<input value={displayName} onChange={(e) => setDisplayName(e.target.value)} maxLength={100} /></label>
-          <button className="primary-button" type="submit" disabled={busy}>{busy ? 'Saving…' : 'Save profile'}</button>
+          {!online ? <div className="notice warning-notice">Reconnect to save profile changes.</div> : null}
+          <button className="primary-button" type="submit" disabled={busy || !online}>{busy ? 'Saving…' : 'Save profile'}</button>
         </form>
       </section>
     </div>

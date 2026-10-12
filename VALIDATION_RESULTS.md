@@ -1,7 +1,7 @@
-# Validation — Web 0.18.7-r2
+# Validation — Web 0.18.8
 
-See `VALIDATION_0_18_7_R2.md` for the current report and local certification commands.
+See `VALIDATION_0_18_8.md` for the current report and WSL certification commands.
 
-Packaging checks passed: 23 source-contract assertions, 88-file TS/TSX syntax parse, targeted file transpile, CSS structural validation, guarded 17-file r2 diff, protected-contract comparison, and full SHA256 manifest verification.
+Build-environment checks completed for this artifact include the 0.18.8 PWA source contract, project preflight, TS/TSX syntax parsing, service-worker JavaScript syntax, manifest/package JSON parsing, CSS structural checks, guarded diff inspection, 54-file protected-contract comparison, SHA256 manifest verification and release/ZIP path + secret scans.
 
-The Web 0.18.7 baseline immediately before this refinement passed 34/34 targeted mobile/reliability tests, 126/126 full frontend tests, TypeScript, production build and 39/39 disposable-PGlite delivery-contract scenarios in the user's WSL checkout. Re-run the authoritative npm chain after applying r2.
+The isolated artifact environment cannot complete `npm ci` because its npm cache is missing registry tarballs. Therefore authoritative Vitest/TypeScript/Vite production validation must be run in the user's WSL checkout after applying the patch; do not treat packaging checks as a replacement for that local validation.
