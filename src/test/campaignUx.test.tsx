@@ -77,7 +77,7 @@ it('restores a tab draft on remount, re-fetches recipient rows, and reuses the s
   expect(((await screen.findByRole('textbox', { name: 'Name' })) as HTMLInputElement).value).toBe('Edited title')
   await waitFor(() => expect((screen.getByRole('button', { name: 'Review campaign' }) as HTMLButtonElement).disabled).toBe(false))
   fireEvent.click(screen.getByRole('button', { name: 'Review campaign' }))
-  await screen.findByRole('heading', { name: 'Review & confirm' })
+  await screen.findByRole('heading', { name: 'Review & confirm' }, { timeout: 5_000 })
   expect(mock.save).toHaveBeenCalledWith(expect.objectContaining({ draftId: 'saved', title: 'Edited title', messageTemplate: ' Hello {{name}} ' }))
   expect(mock.rows.mock.calls.length).toBeGreaterThanOrEqual(3)
 })

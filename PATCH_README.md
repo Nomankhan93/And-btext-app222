@@ -1,7 +1,7 @@
-# Current Patch — Web 0.18.10-r1
+# Current Patch — Web 0.19.1
 
-**Offline Draft & PWA Reliability** corrective release.
+**Public Landing Root Routing Fix**
 
-It adds revision-protected local draft saves, IndexedDB transaction-completion semantics, explicit multi-tab conflict handling, hydration/StrictMode reliability, awaited discard/sign-out cleanup, account-isolated offline cold-start draft access and fail-closed PWA shell installation.
+Signed-out `/` now reaches the existing public landing page instead of the protected auth guard. Signed-in `/` continues to redirect to `/dashboard`, protected-route returnTo behavior is preserved, and App-level routing regressions cover the real route tree.
 
-See `PATCH_0_18_10_R1_README.md`. Backend `0.18.5`, Supabase schema/RLS/RPC, Android gateway, exact-SIM selection and send/delivery contracts are unchanged. The `0.18.10-a1` Phone & SIM mobile fix remains included.
+See `PATCH_0_19_1_README.md`.

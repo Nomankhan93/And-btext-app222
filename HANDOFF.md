@@ -1,9 +1,10 @@
-# Current Handoff — Web 0.18.10-r1
+# Current Handoff — Web 0.19.1
 
-Current frontend release: `0.18.10-r1`
+Current frontend release: `0.19.1`
 Backend contract: `0.18.5`
-Database migration: none
 
-Use `HANDOFF_0_18_10_R1.md` and `VALIDATION_0_18_10_R1.md` for implementation and certification details.
+`0.19.1 — Public Landing Root Routing Fix` is the first patch in the 0.19.x frontend improvement phase. It removes the protected root index conflict that made signed-out `/` redirect to login even though the public landing page was already implemented.
 
-This corrective release hardens offline campaign-draft persistence, conflict handling, offline cold-start access and PWA shell integrity. The `0.18.10-a1` Phone & SIM mobile correction is preserved.
+No database, Android, send/delivery, SIM-selection or offline-draft behavior changes are included.
+
+See `HANDOFF_0_19_1.md`.

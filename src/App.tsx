@@ -46,7 +46,6 @@ export default function App() {
       <Route element={<RequireAuth />}>
         <Route element={<RequireWorkspace />}>
           <Route element={<AppShell />}>
-            <Route index element={<Navigate to="/dashboard" replace />} />
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/campaigns" element={<CampaignsPage />} />
             <Route path="/campaigns/new" element={<SimpleCampaignPage />} />

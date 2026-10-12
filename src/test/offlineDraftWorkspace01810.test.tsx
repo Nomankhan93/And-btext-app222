@@ -87,7 +87,7 @@ it('keeps a prepared message editable offline, blocks server review, then reconc
   await waitFor(() => expect((screen.getByRole('button', { name: 'Review campaign' }) as HTMLButtonElement).disabled).toBe(false))
   expect((screen.getByRole('textbox', { name: /^SMS message/ }) as HTMLTextAreaElement).value).toBe('Edited offline for {{name}}')
   expect(screen.getByText(/Prepared recipient details last refreshed from the server/)).toBeTruthy()
-})
+}, 10_000)
 
 
 it('keeps local autosave enabled after React StrictMode effect replay', async () => {

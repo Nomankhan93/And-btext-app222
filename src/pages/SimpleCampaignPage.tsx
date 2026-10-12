@@ -456,13 +456,18 @@ function CampaignForm({ storageKey }: { storageKey: string }) {
         messageTemplate,
         draftId: savedId,
       }
-      const localResult = await saveCampaignDraftPersistent(storageKey, finalLocalDraft, revision.current)
-      if (localResult.status === 'saved') {
+      const expectedRevision = revision.current
+      // Once the server draft exists, review authorization must not depend on
+      // IndexedDB availability or commit latency. Preserve the exact server-saved
+      // draft synchronously in this tab, then reconcile the durable device copy
+      // in the background with the same CAS protection used by autosave.
+      writeCampaignDraft(storageKey, finalLocalDraft, expectedRevision)
+      void saveQueue.current.then(async () => {
+        const localResult = await saveCampaignDraftPersistent(storageKey, finalLocalDraft, revision.current)
+        if (localResult.status !== 'saved') return
         revision.current = localResult.revision
         writeCampaignDraft(storageKey, finalLocalDraft, localResult.revision, localResult.updatedAt)
-      }
-      // The server draft is authoritative after saveMessageComposerDraft succeeds.
-      // A local conflict must never overwrite another tab or duplicate the server save.
+      }).catch(() => { /* server draft remains authoritative; local sync is best-effort */ })
       navigate(`/campaigns/review/${savedId}`)
     } catch (reason) {
       if (!operation.active.current) return

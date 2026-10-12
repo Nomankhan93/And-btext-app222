@@ -18,7 +18,7 @@ const pkg = JSON.parse(pkgText)
 let assertions = 0
 function check(condition, message) { assert.ok(condition, message); assertions += 1 }
 
-check(pkg.version === '0.18.10-r1', 'frontend version must be 0.18.10-r1')
+check(pkg.version === '0.19.1', 'frontend version must be 0.19.1')
 check(pkg.bulktext?.backendContractVersion === '0.18.5', 'backend contract must remain 0.18.5')
 check(pkg.scripts?.['test:offline-reliability-01810r1']?.includes('offlineWorkspaceColdStart01810r1.test.tsx'), 'r1 targeted reliability test suite must exist')
 check(pkg.scripts?.['test:pwa-shell-01810r1'] === 'node scripts/test-pwa-shell01810r1.mjs', 'service-worker integrity regression script must exist')
@@ -56,6 +56,9 @@ check(campaign.includes('online && serverAuthorized && workspace && parsed'), 'r
 check(campaign.includes('online && serverAuthorized && !restoring'), 'review must require verified server authority')
 check(campaign.includes('Local draft access only.'), 'local-only workspace state must be visible')
 check(campaign.includes('does not authorize recipient preparation, review, devices or sending'), 'local/server authorization boundary must be explained')
+check(campaign.includes('writeCampaignDraft(storageKey, finalLocalDraft, expectedRevision)'), 'server-saved review draft must be preserved synchronously in tab storage')
+check(campaign.includes('void saveQueue.current.then(async () =>'), 'durable device sync after server save must be best-effort and non-blocking')
+check(campaign.includes("}).catch(() => { /* server draft remains authoritative; local sync is best-effort */ })\n      navigate(`/campaigns/review/${savedId}`)"), 'review navigation must proceed without awaiting IndexedDB durable-save completion')
 
 check(locator.includes("locatorPrefix = 'bulktext:workspace-locator:01810r1:'"), 'workspace locator must use an r1 account-scoped key namespace')
 check(locator.includes('localStorage.getItem(key(userId))'), 'workspace locator lookup must be scoped by current user id')
@@ -69,7 +72,7 @@ check(requireWorkspace.includes('Offline local-draft access only'), 'non-draft r
 check(auth.includes('await clearCampaignDrafts()'), 'explicit sign-out must await local draft cleanup')
 check(auth.includes('clearOfflineWorkspaceLocators()'), 'sign-out must clear cached workspace locators')
 
-check(serviceWorker.includes("const VERSION = '0.18.10-r1'"), 'service worker cache version must match r1')
+check(serviceWorker.includes("const VERSION = '0.19.1'"), 'service worker cache version must match r1')
 check(serviceWorker.includes('requiredResponse(url)'), 'precache assets must pass a required-response gate')
 check(serviceWorker.includes('if (!response.ok) throw new Error'), 'non-success required assets must fail installation')
 check(serviceWorker.includes('Fetch and validate the complete build before mutating'), 'shell cache mutation must happen only after complete validation')
@@ -80,4 +83,4 @@ check(!serviceWorker.includes("addEventListener('sync'"), 'service worker must n
 check(css.includes('/* 0.18.10-a1 — Phone & SIM mobile containment */'), '0.18.10-a1 Phone & SIM correction must be preserved')
 check(delivery.includes('UNKNOWN') || delivery.includes('unknown'), 'delivery UNKNOWN safety contract must remain present')
 
-console.log(`Web 0.18.10-r1 Offline Draft & PWA Reliability source contract: PASS (${assertions} assertions)`)
+console.log(`Web 0.19.1 Offline Draft & PWA Reliability source contract: PASS (${assertions} assertions)`)

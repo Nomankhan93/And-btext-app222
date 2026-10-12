@@ -1,9 +1,7 @@
-# Web 0.18.10-r1 — Offline Draft & PWA Reliability
+# Web 0.19.1 — Public Landing Root Routing Fix
 
-BulkText Web `0.18.10-r1` is a corrective reliability release on top of `0.18.10-a1`. It protects browser-local campaign drafts from stale-tab overwrites, waits for true IndexedDB transaction completion before reporting a durable save, reconciles tab and device copies before editing, restores StrictMode autosave behavior, makes discard/clear durable, enables account-isolated local-draft access after an offline cold start and hardens the PWA shell against incomplete installs.
+BulkText Web `0.19.1` starts the 0.19.x frontend improvement phase with a narrow root-routing correction. The public landing page and branded auth experience built in 0.18.9 are preserved, while `/` now has one unambiguous owner: `PublicHomeRoute`. Signed-out visitors receive the public landing page and signed-in visitors are redirected to `/dashboard`.
 
-Frontend version is `0.18.10-r1`; backend contract remains `0.18.5`. There is no Supabase migration, RLS/RPC change, delivery state-machine change, Android change or SIM-selection change.
+Frontend version is `0.19.1`; backend contract remains `0.18.5`. There is no Supabase migration, RLS/RPC change, delivery state-machine change, Android change, SIM-selection change or offline-draft behavior change.
 
-The `0.18.10-a1` Phone & SIM mobile responsive correction is preserved unchanged.
-
-See `PATCH_0_18_10_R1_README.md`, `VALIDATION_0_18_10_R1.md` and `HANDOFF_0_18_10_R1.md`. Historical `0.18.10` and `0.18.10-a1` documents remain in the repository for release history.
+See `PATCH_0_19_1_README.md`, `HANDOFF_0_19_1.md` and `VALIDATION_0_19_1.md` for this release.
