@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 import { afterEach, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { AppShell } from '../components/AppShell'
-import { primaryNavigation, secondaryNavigation } from '../lib/productNavigation'
+import { mobilePrimaryNavigation, secondaryNavigation } from '../lib/productNavigation'
 
 vi.mock('../auth/AuthProvider', () => ({
   useAuth: () => ({ user: { email: 'owner@example.com' }, signOut: vi.fn() }),
@@ -17,29 +17,61 @@ function renderShell() {
       <Routes>
         <Route element={<AppShell />}>
           <Route path="/dashboard" element={<div>Dashboard body</div>} />
+          <Route path="/campaigns" element={<div>Campaigns body</div>} />
+          <Route path="/devices" element={<div>Phone body</div>} />
+          <Route path="/imports" element={<div>Imports body</div>} />
+          <Route path="/consent-suppression" element={<div>Consent body</div>} />
+          <Route path="/composer" element={<div>Drafts body</div>} />
+          <Route path="/settings" element={<div>Settings body</div>} />
         </Route>
       </Routes>
     </MemoryRouter>,
   )
 }
 
-it('keeps the mobile menu labelled, expanded-state aware, and exposes primary plus secondary destinations', () => {
+it('exposes Home, Campaigns, Phone & SIM and expandable Tools in the mobile bottom navigation', () => {
   renderShell()
-  const menu = screen.getByRole('button', { name: 'Open navigation' })
-  expect(menu.getAttribute('aria-expanded')).toBe('false')
-  fireEvent.click(menu)
-  expect(screen.getByRole('button', { name: 'Close navigation' }).getAttribute('aria-expanded')).toBe('true')
-  expect(screen.getByRole('navigation', { name: 'Primary navigation' })).toBeTruthy()
-  expect(screen.getByRole('navigation', { name: 'Secondary tools' })).toBeTruthy()
-  for (const item of [...primaryNavigation, ...secondaryNavigation]) {
-    expect(screen.getByRole('link', { name: item.label }).getAttribute('href')).toBe(item.href)
+  const mobileNavigation = screen.getByRole('navigation', { name: 'Mobile navigation' })
+
+  for (const item of mobilePrimaryNavigation) {
+    expect(within(mobileNavigation).getByRole('link', { name: item.label }).getAttribute('href')).toBe(item.href)
+  }
+
+  const tools = within(mobileNavigation).getByRole('button', { name: 'Tools' })
+  expect(tools.getAttribute('aria-expanded')).toBe('false')
+  fireEvent.click(tools)
+  expect(tools.getAttribute('aria-expanded')).toBe('true')
+
+  const sheet = screen.getByRole('dialog', { name: 'More BulkText tools' })
+  const toolNavigation = within(sheet).getByRole('navigation', { name: 'Mobile tools' })
+  for (const item of secondaryNavigation) {
+    expect(within(toolNavigation).getByRole('link', { name: item.label }).getAttribute('href')).toBe(item.href)
   }
 })
 
-it('closes the navigation with Escape without unmounting routed content', () => {
+it('closes the Tools sheet with Escape without unmounting routed content', () => {
   renderShell()
-  fireEvent.click(screen.getByRole('button', { name: 'Open navigation' }))
+  const mobileNavigation = screen.getByRole('navigation', { name: 'Mobile navigation' })
+  const tools = within(mobileNavigation).getByRole('button', { name: 'Tools' })
+
+  fireEvent.click(tools)
   fireEvent.keyDown(window, { key: 'Escape' })
-  expect(screen.getByRole('button', { name: 'Open navigation' }).getAttribute('aria-expanded')).toBe('false')
+
+  expect(tools.getAttribute('aria-expanded')).toBe('false')
+  expect(screen.queryByRole('dialog', { name: 'More BulkText tools' })).toBeNull()
   expect(screen.getByText('Dashboard body')).toBeTruthy()
+})
+
+it('closes Tools after navigating to a secondary destination and marks Tools active', () => {
+  renderShell()
+  const mobileNavigation = screen.getByRole('navigation', { name: 'Mobile navigation' })
+  const tools = within(mobileNavigation).getByRole('button', { name: 'Tools' })
+
+  fireEvent.click(tools)
+  const sheet = screen.getByRole('dialog', { name: 'More BulkText tools' })
+  fireEvent.click(within(sheet).getByRole('link', { name: 'Settings' }))
+
+  expect(screen.getByText('Settings body')).toBeTruthy()
+  expect(screen.queryByRole('dialog', { name: 'More BulkText tools' })).toBeNull()
+  expect(tools.className).toContain('active')
 })

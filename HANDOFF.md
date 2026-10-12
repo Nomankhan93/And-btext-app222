@@ -1,7 +1,7 @@
-# BulkText handoff — Web 0.18.7
+# BulkText handoff — Web 0.18.7-r2
 
-Frontend 0.18.7 is the Mobile UI/UX release built on Web 0.18.6-r2. Backend contract remains 0.18.5 and every Supabase migration is unchanged.
+Current frontend release is Web `0.18.7-r2`, a narrow mobile navigation refinement over the validated 0.18.7 Mobile UI/UX release. Mobile uses Home / Campaigns / Phone & SIM / Tools bottom navigation; Tools expands to Recipient imports, Consent / do-not-send, Message drafts and Settings. Desktop keeps the sidebar.
 
-Primary mobile hierarchy is Dashboard → Campaigns → Phone & SIM. Recipient imports, consent/do-not-send, message drafts and Settings remain reachable as secondary tools. Same-tab campaign recovery, failed-import preservation, exact-SIM authorization, live queue/delivery refresh and UNKNOWN/no-resend behavior are preserved.
+Backend contract remains `0.18.5`; Supabase migrations, queue/delivery/recovery contracts, exact SIM binding and Android behavior are unchanged.
 
-Read `PATCH_0_18_7_README.md`, `VALIDATION_0_18_7.md` and `CHANGED_FILES_0_18_7.txt`. PWA/service-worker/offline caching remains planned for Web 0.18.8.
+Read `PATCH_0_18_7_R2_README.md`, `VALIDATION_0_18_7_R2.md` and `CHANGED_FILES_0_18_7_R2.txt`. PWA/service-worker/offline caching remains planned for Web 0.18.8.

@@ -1,5 +1,7 @@
-# Validation — Web 0.18.7
+# Validation — Web 0.18.7-r2
 
-See `VALIDATION_0_18_7.md` for the complete report.
+See `VALIDATION_0_18_7_R2.md` for the current report and local certification commands.
 
-Source-contract, syntax, guarded-diff, whitespace, release-path and secret-value scans passed in the isolated builder. Full npm TypeScript/Vitest/Vite execution is pending in the normal WSL checkout because this builder has no npm-registry DNS and an incomplete package cache.
+Packaging checks passed: 23 source-contract assertions, 88-file TS/TSX syntax parse, targeted file transpile, CSS structural validation, guarded 17-file r2 diff, protected-contract comparison, and full SHA256 manifest verification.
+
+The Web 0.18.7 baseline immediately before this refinement passed 34/34 targeted mobile/reliability tests, 126/126 full frontend tests, TypeScript, production build and 39/39 disposable-PGlite delivery-contract scenarios in the user's WSL checkout. Re-run the authoritative npm chain after applying r2.

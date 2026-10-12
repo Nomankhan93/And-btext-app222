@@ -4,6 +4,12 @@ export const primaryNavigation = [
   { label: 'Phone & SIM', href: '/devices' },
 ] as const
 
+export const mobilePrimaryNavigation = [
+  { label: 'Home', href: '/dashboard', icon: 'home' },
+  { label: 'Campaigns', href: '/campaigns', icon: 'campaigns' },
+  { label: 'Phone & SIM', href: '/devices', icon: 'phone' },
+] as const
+
 export const secondaryNavigation = [
   { label: 'Recipient imports', href: '/imports' },
   { label: 'Consent / do-not-send', href: '/consent-suppression' },

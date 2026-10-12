@@ -1,0 +1,19 @@
+Web 0.18.7-r2 changed/new files
+
+CHANGED_FILES_0_18_7_R2.txt
+HANDOFF.md
+HANDOFF_0_18_7_R2.md
+PATCH_README.md
+PATCH_0_18_7_R2_README.md
+README.md
+SHA256SUMS.txt
+VALIDATION_RESULTS.md
+VALIDATION_0_18_7_R2.md
+package-lock.json
+package.json
+scripts/test-mobile-ui0187-source.mjs
+src/components/AppShell.tsx
+src/lib/productNavigation.ts
+src/styles/app.css
+src/test/mobileUi0187.test.tsx
+src/test/productNavigation.test.ts

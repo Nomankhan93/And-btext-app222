@@ -1,7 +1,7 @@
 {
   "name": "bulktext-web",
   "private": true,
-  "version": "0.18.7",
+  "version": "0.18.7-r2",
   "type": "module",
   "scripts": {
     "dev": "vite",

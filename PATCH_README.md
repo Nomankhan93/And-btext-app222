@@ -1,5 +1,5 @@
-# Web 0.18.7 — Mobile UI/UX
+# Web 0.18.7-r2 — Mobile Bottom Navigation Refinement
 
-Current release documentation: `PATCH_0_18_7_README.md`.
+Current patch documentation: `PATCH_0_18_7_R2_README.md`.
 
-Frontend version is `0.18.7`. Backend contract remains `0.18.5`; no database migration is included. Web 0.18.6-r2 remains the baseline and its historical documentation remains under `docs/`.
+Frontend version is `0.18.7-r2`. Backend contract remains `0.18.5`; no database migration is included. This patch changes mobile navigation/presentation only and preserves the validated Web 0.18.7 campaign reliability contracts.
