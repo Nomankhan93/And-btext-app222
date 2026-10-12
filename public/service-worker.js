@@ -1,8 +1,8 @@
-/* BulkText Web 0.18.9 service worker.
+/* BulkText Web 0.18.10 service worker.
  * Safety boundary: cache only the same-origin app shell and static assets.
  * Supabase/auth/queue/delivery/gateway requests are never cached or replayed.
  */
-const VERSION = '0.18.9'
+const VERSION = '0.18.10'
 const CACHE_PREFIX = 'bulktext-pwa-'
 const SHELL_CACHE = `${CACHE_PREFIX}shell-${VERSION}`
 const RUNTIME_CACHE = `${CACHE_PREFIX}runtime-${VERSION}`

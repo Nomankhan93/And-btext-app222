@@ -22,8 +22,9 @@ import { estimatePersonalizedSmsUsage } from '../lib/smsSegments'
 import { useWorkspace } from '../workspace/WorkspaceProvider'
 
 import { useAuth } from '../auth/AuthProvider'
-import { campaignDraftKey, readCampaignDraft, writeCampaignDraft, removeCampaignDraft, type PreparedCampaignRecipients } from '../lib/campaignDraftStorage'
+import { campaignDraftKey, readCampaignDraft, readCampaignDraftPersistent, writeCampaignDraft, writeCampaignDraftPersistent, removeCampaignDraft, type CampaignLocalDraft, type PreparedCampaignRecipients } from '../lib/campaignDraftStorage'
 import { useOperationGuard } from '../lib/useOperationGuard'
+import { usePwa } from '../pwa/PwaProvider'
 
 const emptyMapping: ImportColumnMapping = { phone: '', firstName: null, lastName: null, displayName: null }
 
@@ -37,6 +38,13 @@ function optionalHeader(value: string): string | null {
   return value || null
 }
 
+function localTimeLabel(value: string | null) {
+  if (!value) return null
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) return null
+  return parsed.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+}
+
 export function SimpleCampaignPage() {
   const { user } = useAuth()
   const { workspace } = useWorkspace()
@@ -47,55 +55,149 @@ export function SimpleCampaignPage() {
 
 function CampaignForm({ storageKey }: { storageKey: string }) {
   const { workspace } = useWorkspace()
+  const { online } = usePwa()
   const navigate = useNavigate()
-  const [restored] = useState(() => readCampaignDraft(storageKey))
+  const [sessionRestored] = useState(() => readCampaignDraft(storageKey))
   const operation = useOperationGuard()
-  const [draftId, setDraftId] = useState<string | null>(restored?.draftId ?? null)
-  const [storageFailed, setStorageFailed] = useState(false)
+  const saveQueue = useRef<Promise<unknown>>(Promise.resolve())
+  const saveGeneration = useRef(0)
+  const interactedBeforeHydration = useRef(false)
+  const persistenceEnabled = useRef(true)
+  const [localHydrated, setLocalHydrated] = useState(Boolean(sessionRestored))
+  const [localSaveState, setLocalSaveState] = useState<'loading' | 'saving' | 'saved' | 'failed'>(sessionRestored ? 'saving' : 'loading')
+  const [localSavedAt, setLocalSavedAt] = useState<string | null>(null)
+  const [reconciledAt, setReconciledAt] = useState<string | null>(null)
+  const [draftId, setDraftId] = useState<string | null>(sessionRestored?.draftId ?? null)
   const [restoreAttempt, setRestoreAttempt] = useState(0)
   const [restoreFailed, setRestoreFailed] = useState(false)
-  const [restoring, setRestoring] = useState(Boolean(restored?.prepared))
+  const [restoring, setRestoring] = useState(Boolean(sessionRestored?.prepared && online))
   const preparation = useRef<{ signature: string; importId?: string; previewId?: string; snapshotId?: string; grants?: number }>({ signature: '' })
   const fileRef = useRef<HTMLInputElement>(null)
-  const [campaignName, setCampaignName] = useState(restored?.campaignName ?? '')
-  const [parsed, setParsed] = useState<ParsedImportFile | null>(restored?.parsed ?? null)
-  const [detection, setDetection] = useState<SmartImportDetection | null>(() => restored?.parsed ? detectSmartImportMapping(restored.parsed) : null)
-  const [mapping, setMapping] = useState<ImportColumnMapping>(restored?.mapping ?? emptyMapping)
-  const [consentConfirmed, setConsentConfirmed] = useState(Boolean(restored?.prepared))
-  const [evidenceReference, setEvidenceReference] = useState(restored?.evidenceReference ?? '')
-  const [prepared, setPrepared] = useState<PreparedCampaignRecipients | null>(restored?.prepared ?? null)
-  const [messageTemplate, setMessageTemplate] = useState(restored?.messageTemplate ?? '')
-  const [personalizationRows, setPersonalizationRows] = useState<Awaited<ReturnType<typeof getMessagePersonalizationSourceRows>>>([])
+  const [campaignName, setCampaignName] = useState(sessionRestored?.campaignName ?? '')
+  const [parsed, setParsed] = useState<ParsedImportFile | null>(sessionRestored?.parsed ?? null)
+  const [detection, setDetection] = useState<SmartImportDetection | null>(() => sessionRestored?.parsed ? detectSmartImportMapping(sessionRestored.parsed) : null)
+  const [mapping, setMapping] = useState<ImportColumnMapping>(sessionRestored?.mapping ?? emptyMapping)
+  const [consentConfirmed, setConsentConfirmed] = useState(Boolean(sessionRestored?.prepared))
+  const [evidenceReference, setEvidenceReference] = useState(sessionRestored?.evidenceReference ?? '')
+  const [prepared, setPrepared] = useState<PreparedCampaignRecipients | null>(sessionRestored?.prepared ?? null)
+  const [messageTemplate, setMessageTemplate] = useState(sessionRestored?.messageTemplate ?? '')
+  const [personalizationRows, setPersonalizationRows] = useState<Awaited<ReturnType<typeof getMessagePersonalizationSourceRows>>>(sessionRestored?.personalizationRows ?? [])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [notice, setNotice] = useState<string | null>(restored ? 'Recovered your campaign in this tab. Review recipients and consent before continuing.' : null)
+  const [notice, setNotice] = useState<string | null>(sessionRestored ? 'Recovered your campaign from this browser tab. A durable device copy will keep it available after the tab closes.' : null)
+
+  function applyLocalDraft(draft: CampaignLocalDraft) {
+    setCampaignName(draft.campaignName)
+    setParsed(draft.parsed)
+    setDetection(draft.parsed ? detectSmartImportMapping(draft.parsed) : null)
+    setMapping(draft.mapping)
+    setConsentConfirmed(Boolean(draft.prepared))
+    setEvidenceReference(draft.evidenceReference)
+    setPrepared(draft.prepared)
+    setMessageTemplate(draft.messageTemplate)
+    setPersonalizationRows(draft.personalizationRows ?? [])
+    setDraftId(draft.draftId)
+  }
 
   useEffect(() => {
-    setStorageFailed(!writeCampaignDraft(storageKey, { campaignName, parsed, mapping, evidenceReference, prepared, messageTemplate, draftId }))
-  }, [storageKey, campaignName, parsed, mapping, evidenceReference, prepared, messageTemplate, draftId])
+    if (sessionRestored) return
+    let cancelled = false
+    setLocalSaveState('loading')
+    void readCampaignDraftPersistent(storageKey).then((record) => {
+      if (cancelled) return
+      if (record && !interactedBeforeHydration.current) {
+        applyLocalDraft(record.draft)
+        setLocalSavedAt(record.updatedAt)
+        setLocalSaveState('saved')
+        setNotice('Recovered your campaign from this device. Reconnect before recipient preparation, review or sending.')
+      } else {
+        if (record && interactedBeforeHydration.current) setNotice('A previously saved device draft was left untouched because you already started editing this form.')
+        setLocalSaveState('saving')
+      }
+      setLocalHydrated(true)
+    })
+    return () => { cancelled = true }
+  // The storage key remounts CampaignForm when account/workspace changes.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storageKey])
+
+  useEffect(() => () => { persistenceEnabled.current = false }, [])
 
   useEffect(() => {
-    if (!restored?.prepared || !workspace) return
+    if (!localHydrated || !persistenceEnabled.current) return
+    const value: CampaignLocalDraft = {
+      campaignName,
+      parsed,
+      mapping,
+      evidenceReference,
+      prepared,
+      personalizationRows,
+      messageTemplate,
+      draftId,
+    }
+    // Keep same-tab reload recovery synchronous while IndexedDB provides durable storage.
+    writeCampaignDraft(storageKey, value)
+    const generation = ++saveGeneration.current
+    setLocalSaveState('saving')
+    const timer = window.setTimeout(() => {
+      if (!persistenceEnabled.current) return
+      saveQueue.current = saveQueue.current.then(async () => {
+        const updatedAt = await writeCampaignDraftPersistent(storageKey, value)
+        if (!persistenceEnabled.current || generation !== saveGeneration.current) return
+        if (updatedAt) {
+          setLocalSavedAt(updatedAt)
+          setLocalSaveState('saved')
+        } else {
+          setLocalSaveState('failed')
+        }
+      })
+    }, 180)
+    return () => window.clearTimeout(timer)
+  }, [localHydrated, storageKey, campaignName, parsed, mapping, evidenceReference, prepared, personalizationRows, messageTemplate, draftId])
+
+  useEffect(() => {
+    if (!localHydrated || !prepared || !workspace) return
+    if (!online) {
+      setRestoring(false)
+      setRestoreFailed(false)
+      return
+    }
     let cancelled = false
     setRestoring(true)
     setRestoreFailed(false)
-    void getMessagePersonalizationSourceRows(workspace.id, restored.prepared.snapshotId)
-      .then((rows) => { if (!cancelled) setPersonalizationRows(rows) })
-      .catch((reason) => { if (!cancelled) { setRestoreFailed(true); setError(errorMessage(reason, 'Could not reload prepared recipients. Retry loading them.')) } })
+    void getMessagePersonalizationSourceRows(workspace.id, prepared.snapshotId)
+      .then((rows) => {
+        if (cancelled) return
+        setPersonalizationRows(rows)
+        setReconciledAt(new Date().toISOString())
+      })
+      .catch((reason) => {
+        if (cancelled) return
+        setRestoreFailed(true)
+        if (personalizationRows.length === 0) setError(errorMessage(reason, 'Could not refresh prepared recipients. Retry when you are online.'))
+      })
       .finally(() => { if (!cancelled) setRestoring(false) })
     return () => { cancelled = true }
-  }, [restored, workspace?.id, restoreAttempt])
+  // Re-run after reconnect or an explicit retry; the prepared snapshot itself is immutable.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [localHydrated, prepared?.snapshotId, workspace?.id, online, restoreAttempt])
 
   useEffect(() => {
     function warn(event: BeforeUnloadEvent) {
-      if (busy || (storageFailed && (campaignName || messageTemplate || parsed))) { event.preventDefault(); event.returnValue = '' }
+      if (busy || localSaveState === 'saving' || (localSaveState === 'failed' && (campaignName || messageTemplate || parsed))) {
+        event.preventDefault()
+        event.returnValue = ''
+      }
     }
     window.addEventListener('beforeunload', warn)
     return () => window.removeEventListener('beforeunload', warn)
-  }, [busy, storageFailed, campaignName, messageTemplate, parsed])
+  }, [busy, localSaveState, campaignName, messageTemplate, parsed])
 
-  function discard() {
-    if (!window.confirm('Discard this tab’s campaign draft? Saved imports, consent records and server drafts are retained.')) return
+  async function discard() {
+    if (!window.confirm('Discard this device’s campaign draft? Saved imports, consent records and server drafts are retained.')) return
+    persistenceEnabled.current = false
+    saveGeneration.current += 1
+    await saveQueue.current
     removeCampaignDraft(storageKey)
     navigate('/campaigns')
   }
@@ -112,10 +214,10 @@ function CampaignForm({ storageKey }: { storageKey: string }) {
   const templateAnalysis = useMemo(() => analyzeMessageTemplate(messageTemplate), [messageTemplate])
   const usage = useMemo(() => estimatePersonalizedSmsUsage(messageTemplate, personalizationRows), [messageTemplate, personalizationRows])
   const canPrepare = Boolean(
-    workspace && parsed && mapping.phone && !parsed.truncated && uniqueReady > 0 && consentConfirmed && campaignName.trim(),
+    online && workspace && parsed && mapping.phone && !parsed.truncated && uniqueReady > 0 && consentConfirmed && campaignName.trim(),
   )
   const canReview = Boolean(
-    !restoring && prepared && campaignName.trim() && messageTemplate.trim() && !templateAnalysis.malformed && templateAnalysis.unsupportedTokens.length === 0 && usage.readyRecipients > 0 && usage.blockedRecipients === 0,
+    online && !restoring && !restoreFailed && prepared && campaignName.trim() && messageTemplate.trim() && !templateAnalysis.malformed && templateAnalysis.unsupportedTokens.length === 0 && usage.readyRecipients > 0 && usage.blockedRecipients === 0,
   )
   const currentStep = !parsed ? 1 : !prepared ? 2 : canReview ? 4 : 3
 
@@ -145,6 +247,7 @@ function CampaignForm({ storageKey }: { storageKey: string }) {
   }
 
   async function prepareRecipients() {
+    if (!online) { setError('Reconnect to prepare recipients. Imports and edits can stay local while offline.'); return }
     if (!workspace || !parsed || !preview || !canPrepare || !operation.start()) return
     setBusy(true)
     setError(null)
@@ -189,6 +292,7 @@ function CampaignForm({ storageKey }: { storageKey: string }) {
       if (eligibleRows === 0) throw new Error('No recipients are eligible after the do-not-send and consent checks.')
       setPrepared({ importId, previewId, snapshotId, includedRows: selected.length, eligibleRows, suppressedRows })
       setPersonalizationRows(sourceRows)
+      setReconciledAt(new Date().toISOString())
       setNotice(`${eligibleRows.toLocaleString()} recipient${eligibleRows === 1 ? '' : 's'} ready for this campaign. ${progress.grants.toLocaleString()} consent grant${progress.grants === 1 ? '' : 's'} recorded; ${suppressedRows.toLocaleString()} suppressed.`)
     } catch (reason) {
       if (!operation.active.current) return
@@ -200,6 +304,7 @@ function CampaignForm({ storageKey }: { storageKey: string }) {
   }
 
   async function reviewCampaign() {
+    if (!online) { setError('Reconnect to save this draft to your account and continue to review.'); return }
     if (!workspace || !prepared || !canReview || !operation.start()) return
     setBusy(true)
     setError(null)
@@ -213,7 +318,18 @@ function CampaignForm({ storageKey }: { storageKey: string }) {
       })
       operation.check()
       setDraftId(savedId)
-      writeCampaignDraft(storageKey, { campaignName, parsed, mapping, evidenceReference, prepared, messageTemplate, draftId: savedId })
+      const finalLocalDraft: CampaignLocalDraft = {
+        campaignName,
+        parsed,
+        mapping,
+        evidenceReference,
+        prepared,
+        personalizationRows,
+        messageTemplate,
+        draftId: savedId,
+      }
+      writeCampaignDraft(storageKey, finalLocalDraft)
+      await writeCampaignDraftPersistent(storageKey, finalLocalDraft)
       navigate(`/campaigns/review/${savedId}`)
     } catch (reason) {
       if (!operation.active.current) return
@@ -226,21 +342,32 @@ function CampaignForm({ storageKey }: { storageKey: string }) {
 
   if (!workspace) return null
 
+  const savedTime = localTimeLabel(localSavedAt)
+  const reconciledTime = localTimeLabel(reconciledAt)
+
   return (
-    <div className="page-stack simple-campaign-page">
+    <div className="page-stack simple-campaign-page" onChangeCapture={() => { if (!localHydrated) interactedBeforeHydration.current = true }}>
       <section className="page-heading recipient-heading">
         <div>
           <p className="eyebrow">New campaign</p>
           <h1>Create campaign</h1>
           <p>Name it, upload a CSV/XLSX list with column headers, write the message and review. BulkText handles number detection, normalization, duplicates, consent declaration and suppression checks behind the scenes.</p>
         </div>
-        <div className="button-row"><Link className="secondary-button" to="/campaigns">Back to campaigns</Link><button type="button" className="secondary-button" disabled={busy || restoring} onClick={discard}>Discard draft</button></div>
+        <div className="button-row"><Link className="secondary-button" to="/campaigns">Back to campaigns</Link><button type="button" className="secondary-button" disabled={busy || restoring} onClick={() => void discard()}>Discard draft</button></div>
       </section>
 
-      <p className="muted-copy">Draft recovery is kept in this browser tab, including uploaded recipients. Signing out clears it. Final review is saved to your account.</p>
-      {storageFailed ? <div role="alert" className="notice warning-notice">This draft could not be saved in tab storage (storage blocked or list too large). Keep this page open until you save for review.</div> : null}
-      {restoreFailed && prepared ? <button className="secondary-button" type="button" disabled={restoring} onClick={() => { setError(null); setRestoreAttempt((value) => value + 1) }}>Retry prepared recipients</button> : null}
-      {restoring ? <div role="status" className="notice">Reloading prepared recipients…</div> : null}
+      <section className="draft-storage-status" aria-label="Offline draft status">
+        <div>
+          <strong>{localSaveState === 'loading' ? 'Checking saved device draft…' : localSaveState === 'failed' ? 'Local draft storage unavailable' : localSaveState === 'saving' ? 'Saving locally…' : 'Saved on this device'}</strong>
+          <span>{localSaveState === 'saved' && savedTime ? `Last local save ${savedTime}. ` : ''}Uploaded recipient data and message edits stay scoped to this account/workspace in this browser. Signing out or discarding clears the local campaign draft.</span>
+        </div>
+        <span className={`badge ${localSaveState === 'failed' ? 'badge-warning' : localSaveState === 'loading' ? 'badge-muted' : 'badge-success'}`}>{localSaveState === 'loading' ? 'Checking' : localSaveState === 'failed' ? 'Tab only' : online ? 'Local draft' : 'Offline draft'}</span>
+      </section>
+      {localSaveState === 'failed' ? <div role="alert" className="notice warning-notice">Durable browser storage is blocked or unavailable. Same-tab recovery may still work, but keep this page open until you reconnect and save for review.</div> : null}
+      {!online ? <div className="notice warning-notice" role="status"><strong>Offline draft mode.</strong> You can edit the campaign name, import a CSV/XLSX file and continue editing a previously prepared message. Reconnect to prepare recipients, save for review or send.</div> : null}
+      {reconciledTime ? <p className="muted-copy draft-reconciled-copy">Prepared recipient details last refreshed from the server at {reconciledTime}. Local message edits are not sent to the server until you choose Review campaign.</p> : null}
+      {restoreFailed && prepared && online ? <button className="secondary-button" type="button" disabled={restoring} onClick={() => { setError(null); setRestoreAttempt((value) => value + 1) }}>Retry prepared recipients</button> : null}
+      {restoring ? <div role="status" className="notice">Refreshing prepared recipients from the server…</div> : null}
       {error ? <div className="notice error-notice">{error}</div> : null}
       {notice ? <div className="notice success-notice">{notice}</div> : null}
 

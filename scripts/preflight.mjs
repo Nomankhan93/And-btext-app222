@@ -3,7 +3,8 @@ import process from 'node:process'
 
 const requiredFiles = [
   'src/lib/campaignDraftStorage.ts','src/lib/useOperationGuard.ts','src/test/campaignUx.test.tsx','src/test/workspaceReliability.test.tsx',
-  'docs/DRAFT_IMPORT_CAMPAIGN_UX_0186.md',
+  'src/test/offlineDraftStorage01810.test.ts','src/test/offlineDraftWorkspace01810.test.tsx','scripts/test-offline-draft01810-source.mjs',
+  'docs/DRAFT_IMPORT_CAMPAIGN_UX_0186.md','docs/OFFLINE_DRAFT_WORKSPACE_01810.md',
   'supabase/migrations/20261010000100_delivery_recovery_contract_hardening.sql',
   'scripts/test-delivery-contract0185.mjs','src/lib/deliveryContract.ts',
   'package.json','.env.example','src/App.tsx','src/pages/DashboardPage.tsx','src/pages/CampaignsPage.tsx',
@@ -44,7 +45,7 @@ const forbiddenPresent=[]; for (const file of forbiddenFiles) { try { await acce
 if (missing.length || forbiddenPresent.length) { if(missing.length) console.error(`Preflight failed. Missing: ${missing.join(', ')}`); if(forbiddenPresent.length) console.error(`Preflight failed. Legacy files present: ${forbiddenPresent.join(', ')}`); process.exit(1) }
 
 const packageJson = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'))
-if (packageJson.version !== '0.18.9') { console.error(`Preflight failed. Expected package version 0.18.9, got ${packageJson.version}`); process.exit(1) }
+if (packageJson.version !== '0.18.10') { console.error(`Preflight failed. Expected package version 0.18.10, got ${packageJson.version}`); process.exit(1) }
 
 const migration = await readFile(new URL('../supabase/migrations/20261001000340_delivery_attempts_callbacks_recovery.sql', import.meta.url), 'utf8')
 const requiredMigrationMarkers = [
@@ -142,6 +143,6 @@ for (const marker of ["version', '') <> '0.18.5'", 'Production schema must not e
   if (!freshVerifier.includes(marker)) { console.error(`Preflight failed. Fresh-schema 0.18.4 marker missing: ${marker}`); process.exit(1) }
 }
 
-console.log('BulkText Web 0.18.9 / backend 0.18.5 preflight PASS')
+console.log('BulkText Web 0.18.10 / backend 0.18.5 preflight PASS')
 
-if (packageJson.bulktext?.backendContractVersion !== '0.18.5') { console.error('Expected backend contract 0.18.5 for Web 0.18.9'); process.exit(1) }
+if (packageJson.bulktext?.backendContractVersion !== '0.18.5') { console.error('Expected backend contract 0.18.5 for Web 0.18.10'); process.exit(1) }

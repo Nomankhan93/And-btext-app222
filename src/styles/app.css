@@ -1340,3 +1340,25 @@ body { background: var(--light-bg); }
   .auth-card { padding: 24px 18px; }
   .topbar-brand .brand-lockup-copy small { display: none; }
 }
+
+/* 0.18.10 — Advanced offline draft workspace */
+.draft-storage-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 14px 16px;
+  border: 1px solid #cfe2f7;
+  border-radius: 14px;
+  background: #f7fbff;
+}
+.draft-storage-status > div { min-width: 0; display: grid; gap: 3px; }
+.draft-storage-status strong { color: var(--brand-dark); font-size: .9rem; }
+.draft-storage-status span:not(.badge) { color: var(--muted); font-size: .82rem; line-height: 1.45; }
+.draft-storage-status .badge { flex: 0 0 auto; }
+.draft-reconciled-copy { margin: -10px 0 0; font-size: .8rem; }
+
+@media (max-width: 640px) {
+  .draft-storage-status { align-items: flex-start; flex-direction: column; gap: 10px; }
+  .draft-storage-status .badge { align-self: flex-start; }
+}

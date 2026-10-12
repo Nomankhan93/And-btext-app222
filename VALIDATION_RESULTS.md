@@ -1,7 +1,7 @@
-# Validation — Web 0.18.9
+# Validation — Web 0.18.10
 
-See `VALIDATION_0_18_9.md` for the current report and WSL certification commands.
+See `VALIDATION_0_18_10.md` for the current certification report and WSL release command.
 
-Artifact-environment checks completed for this release include the 0.18.9 landing/brand source contract, preserved 0.18.8 PWA contract, preserved 0.18.7-r2 mobile-navigation contract, project preflight, TypeScript syntax parsing, service-worker JavaScript syntax, package/manifest JSON parsing, CSS structural checks, guarded 32-file scope inspection, release/ZIP path + secret scans, overlay apply simulation and SHA256 verification.
+Artifact checks completed successfully for the 0.18.10 source contract (34 assertions), preserved PWA/mobile/landing source contracts, project preflight, 96-file TypeScript/TSX syntax audit, IndexedDB persistence runtime smoke, service-worker syntax, CSS structure, 46-file protected-contract comparison, release path/secret scans and deterministic ZIP packaging.
 
-The isolated artifact environment cannot complete `npm ci` because required registry tarballs are missing from its local npm cache. Authoritative Vitest/TypeScript/Vite/delivery-contract validation must therefore be run in the user's normal WSL checkout after applying the patch.
+The isolated environment could not finish `npm ci`, so authoritative Vitest, TypeScript semantic checking, Vite production build and the 0.18.5 delivery SQL contract suite must be run in the normal WSL project before commit.

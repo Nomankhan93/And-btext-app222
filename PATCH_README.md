@@ -1,5 +1,5 @@
-# Current Patch — Web 0.18.9
+# Current Patch — Web 0.18.10
 
-Current patch: **Public Landing, Brand System & Auth Experience**.
+Advanced Offline Draft Workspace: durable account/workspace-scoped IndexedDB campaign drafts, offline import/message editing, local save status and reconnect recipient reconciliation.
 
-See `PATCH_0_18_9_README.md` for scope and preserved-contract details. No database migration or Android change is included.
+See `PATCH_0_18_10_README.md`. Offline sending, queue replay, backend schema and Android behavior are unchanged.

@@ -1,9 +1,9 @@
-# Web 0.18.9 — Public Landing, Brand System & Auth Experience
+# Web 0.18.10 — Advanced Offline Draft Workspace
 
-BulkText Web `0.18.9` turns the signed-out root into a product-led public landing page, integrates the official BulkText icon/logo, applies the final deep-navy / blue / cyan brand system to public and auth surfaces, and refreshes authentication presentation without changing authentication logic.
+BulkText Web `0.18.10` upgrades campaign draft recovery to a durable browser-local workspace using IndexedDB. Parsed CSV/XLSX recipient data, prepared personalization rows and message edits can survive tab/browser closure, while reconnect reconciliation refreshes prepared recipient details without overwriting local message edits.
 
-The landing page uses accurate commercial wording: no Pricing navigation before plans exist, no unsupported `Start Free` promise, no claim that carrier SMS is free, and no generic retry marketing. The product message centers on exact phone/SIM routing, Android Gateway operation and **Live send and delivery status** with **Delivery & Recovery Tracking**.
+This remains a **draft-only** offline capability. Recipient preparation, server review/save, campaign confirmation, queueing, recovery and SMS sending still require a live connection. Unprepared consent confirmation is deliberately not persisted and must be reconfirmed after restoration.
 
-Frontend version is `0.18.9`; backend contract remains `0.18.5`. No database migration or Android change is included. Existing PWA/offline safety, mobile bottom navigation, exact-SIM authorization, durable queue, delivery/recovery semantics and draft/live-status reliability are preserved.
+Frontend version is `0.18.10`; backend contract remains `0.18.5`. There is no database migration or Android change.
 
-See `PATCH_0_18_9_README.md`, `VALIDATION_0_18_9.md` and `HANDOFF_0_18_9.md`.
+See `PATCH_0_18_10_README.md`, `VALIDATION_0_18_10.md`, `HANDOFF_0_18_10.md` and `docs/OFFLINE_DRAFT_WORKSPACE_01810.md`.
