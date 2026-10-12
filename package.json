@@ -1,7 +1,7 @@
 {
   "name": "bulktext-web",
   "private": true,
-  "version": "0.19.4",
+  "version": "0.19.5",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -41,7 +41,9 @@
     "test:pwa-scroll-0192": "vitest run src/test/pwaScroll0192.test.ts src/test/pwa0188.test.tsx src/test/mobileUi0187.test.tsx",
     "test:release-artifact-source-0193": "node scripts/test-release-artifact0193-source.mjs",
     "test:mobile-dialog-focus-source-0194": "node scripts/test-mobile-dialog-focus0194-source.mjs",
-    "test:mobile-dialog-focus-0194": "vitest run src/test/mobileDialogFocus0194.test.tsx src/test/mobileUi0187.test.tsx"
+    "test:mobile-dialog-focus-0194": "vitest run src/test/mobileDialogFocus0194.test.tsx src/test/mobileUi0187.test.tsx",
+    "test:error-presentation-source-0195": "node scripts/test-error-presentation0195-source.mjs",
+    "test:error-presentation-0195": "vitest run src/test/errors.test.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.117.2",

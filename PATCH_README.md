@@ -1,7 +1,7 @@
-# Current Patch — Web 0.19.4
+# Current Patch — Web 0.19.5
 
-**Mobile Dialog Focus Accessibility**
+**Safe Error Presentation & Diagnostics**
 
-The mobile Tools dialog now moves focus inside on open, wraps `Tab`/`Shift+Tab` within the modal, restores focus to the Tools trigger when closed, and keeps the pointer-dismiss backdrop outside sequential keyboard focus. Existing visual design, navigation and workflow behavior are preserved.
+Shared error presentation now classifies network, authentication, permission and internal backend failures into safe user-facing copy. Backend `details`, `hint`, SQL/RLS implementation text and error codes are retained only in structured diagnostic context rather than appended to UI messages. Existing safe validation and domain errors remain actionable.
 
-See `PATCH_0_19_4_README.md`.
+See `PATCH_0_19_5_README.md`.
