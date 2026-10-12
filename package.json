@@ -1,7 +1,7 @@
 {
   "name": "bulktext-web",
   "private": true,
-  "version": "0.18.10-a1",
+  "version": "0.18.10-r1",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -31,7 +31,10 @@
     "test:landing-0189": "vitest run src/test/landingBrand0189.test.tsx src/test/authReliability.test.tsx src/test/mobileUi0187.test.tsx src/test/pwa0188.test.tsx src/test/productNavigation.test.ts",
     "test:offline-draft-source-01810": "node scripts/test-offline-draft01810-source.mjs",
     "test:offline-draft-01810": "vitest run src/test/offlineDraftStorage01810.test.ts src/test/offlineDraftWorkspace01810.test.tsx src/test/campaignDraftStorage.test.ts src/test/campaignUx.test.tsx src/test/pwa0188.test.tsx src/test/workspaceReliability.test.tsx",
-    "test:phone-sim-mobile-source-01810a1": "node scripts/test-phone-sim-mobile01810a1-source.mjs"
+    "test:phone-sim-mobile-source-01810a1": "node scripts/test-phone-sim-mobile01810a1-source.mjs",
+    "test:offline-reliability-source-01810r1": "node scripts/test-offline-reliability01810r1-source.mjs",
+    "test:pwa-shell-01810r1": "node scripts/test-pwa-shell01810r1.mjs",
+    "test:offline-reliability-01810r1": "vitest run src/test/offlineDraftStorage01810.test.ts src/test/offlineDraftWorkspace01810.test.tsx src/test/offlineWorkspaceColdStart01810r1.test.tsx src/test/campaignDraftStorage.test.ts src/test/campaignUx.test.tsx src/test/pwa0188.test.tsx src/test/workspaceReliability.test.tsx"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.117.2",

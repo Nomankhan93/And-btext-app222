@@ -15,8 +15,8 @@ function Form() {
 }
 function App() { return <WorkspaceProvider><MemoryRouter><Routes><Route element={<RequireWorkspace />}><Route path="/" element={<Form />} /></Route></Routes></MemoryRouter></WorkspaceProvider> }
 function result(id: string) { return { data: [{ workspace_id: id, name: `Workspace ${id}`, slug: id }], error: null } }
-beforeEach(() => { mocks.user = { id: 'one' }; mocks.rpc.mockReset().mockResolvedValue(result('one')) })
-afterEach(cleanup)
+beforeEach(() => { localStorage.clear(); mocks.user = { id: 'one' }; mocks.rpc.mockReset().mockResolvedValue(result('one')) })
+afterEach(() => { cleanup(); localStorage.clear() })
 it('preserves the mounted form across same-user auth object refresh and explicit refresh failure', async () => {
   const view = render(<App />)
   fireEvent.change(await screen.findByLabelText('Draft'), { target: { value: 'Unsaved campaign' } })

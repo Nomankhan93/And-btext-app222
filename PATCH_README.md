@@ -1,7 +1,7 @@
-# Current Patch — Web 0.18.10-a1
+# Current Patch — Web 0.18.10-r1
 
-Phone & SIM mobile responsive correction: page-width containment, viewport-safe pairing QR/code layout, mobile action sizing, safe device/SIM wrapping and locally scrollable pairing history.
+**Offline Draft & PWA Reliability** corrective release.
 
-See `PATCH_0_18_10_A1_README.md`. Pairing workflow, SIM-selection semantics, send/delivery behavior, backend schema/RPC/RLS, PWA/offline-draft behavior and Android behavior are unchanged.
+It adds revision-protected local draft saves, IndexedDB transaction-completion semantics, explicit multi-tab conflict handling, hydration/StrictMode reliability, awaited discard/sign-out cleanup, account-isolated offline cold-start draft access and fail-closed PWA shell installation.
 
-The planned next corrective release remains `0.18.10-r1 — Offline Draft & PWA Reliability`.
+See `PATCH_0_18_10_R1_README.md`. Backend `0.18.5`, Supabase schema/RLS/RPC, Android gateway, exact-SIM selection and send/delivery contracts are unchanged. The `0.18.10-a1` Phone & SIM mobile fix remains included.

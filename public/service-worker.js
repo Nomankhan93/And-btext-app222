@@ -1,8 +1,10 @@
-/* BulkText Web 0.18.10 service worker.
+/* BulkText Web 0.18.10-r1 service worker.
  * Safety boundary: cache only the same-origin app shell and static assets.
  * Supabase/auth/queue/delivery/gateway requests are never cached or replayed.
+ * The installed shell is immutable for this worker version so its hashed JS/CSS
+ * always stays paired with the HTML that referenced it at installation time.
  */
-const VERSION = '0.18.10'
+const VERSION = '0.18.10-r1'
 const CACHE_PREFIX = 'bulktext-pwa-'
 const SHELL_CACHE = `${CACHE_PREFIX}shell-${VERSION}`
 const RUNTIME_CACHE = `${CACHE_PREFIX}runtime-${VERSION}`
@@ -23,18 +25,25 @@ const PRECACHE_URLS = [
   '/branding/bulktext-logo.png',
 ]
 
-async function precacheAppShell() {
-  const cache = await caches.open(SHELL_CACHE)
-  const shellResponse = await fetch(APP_SHELL, { cache: 'reload' })
-  if (!shellResponse.ok) throw new Error(`App shell request failed: ${shellResponse.status}`)
+async function requiredResponse(url) {
+  const response = await fetch(url, { cache: 'reload' })
+  if (!response.ok) throw new Error(`Required offline shell asset failed: ${url} (${response.status})`)
+  return response
+}
 
+async function precacheAppShell() {
+  const shellResponse = await requiredResponse(APP_SHELL)
   const shellHtml = await shellResponse.clone().text()
   const buildAssets = [...shellHtml.matchAll(/(?:src|href)=["'](\/assets\/[^"']+)["']/g)].map((match) => match[1])
+  const urls = [...new Set([...PRECACHE_URLS.filter((url) => url !== APP_SHELL), ...buildAssets])]
+
+  // Fetch and validate the complete build before mutating the versioned cache.
+  // A missing JS/CSS/icon/fallback aborts installation instead of accepting a
+  // shell that cannot cold-start offline.
+  const fetched = await Promise.all(urls.map(async (url) => [url, await requiredResponse(url)]))
+  const cache = await caches.open(SHELL_CACHE)
   await cache.put(APP_SHELL, shellResponse)
-  await Promise.all([...new Set([...PRECACHE_URLS.filter((url) => url !== APP_SHELL), ...buildAssets])].map(async (url) => {
-    const response = await fetch(url, { cache: 'reload' })
-    if (response.ok) await cache.put(url, response)
-  }))
+  await Promise.all(fetched.map(([url, response]) => cache.put(url, response)))
 }
 
 self.addEventListener('install', (event) => {
@@ -64,12 +73,13 @@ function isStaticAsset(url) {
 }
 
 async function networkFirstNavigation(request) {
-  const cache = await caches.open(SHELL_CACHE)
   try {
-    const response = await fetch(request)
-    if (response.ok && response.type === 'basic') await cache.put(APP_SHELL, response.clone())
-    return response
+    // Successful navigations are returned directly. They must not replace the
+    // installed shell HTML, otherwise that HTML could reference assets from a
+    // different deployment than the versioned offline cache.
+    return await fetch(request)
   } catch {
+    const cache = await caches.open(SHELL_CACHE)
     return (await cache.match(APP_SHELL)) || (await cache.match(OFFLINE_FALLBACK)) || Response.error()
   }
 }

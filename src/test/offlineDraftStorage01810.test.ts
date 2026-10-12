@@ -6,42 +6,82 @@ import {
   clearCampaignDrafts,
   readCampaignDraftPersistent,
   removeCampaignDraft,
+  saveCampaignDraftPersistent,
   writeCampaignDraftPersistent,
   type CampaignLocalDraft,
 } from '../lib/campaignDraftStorage'
 
 const rows = new Map<string, unknown>()
 let storeCreated = false
+let abortNextReadwrite = false
 const originalIndexedDb = globalThis.indexedDB
-
-function asyncRequest<T>(value: () => T) {
-  const request: Record<string, unknown> = { result: undefined, error: null, onsuccess: null, onerror: null }
-  setTimeout(() => {
-    try {
-      request.result = value()
-      ;(request.onsuccess as null | (() => void))?.()
-    } catch (error) {
-      request.error = error
-      ;(request.onerror as null | (() => void))?.()
-    }
-  }, 0)
-  return request
-}
 
 function installFakeIndexedDb() {
   const database = {
     objectStoreNames: { contains: () => storeCreated },
     createObjectStore: () => { storeCreated = true; return {} },
-    transaction: () => ({
-      objectStore: () => ({
-        get: (key: string) => asyncRequest(() => rows.get(key)),
-        put: (value: { key: string }) => asyncRequest(() => { rows.set(value.key, value); return value.key }),
-        delete: (key: string) => asyncRequest(() => { rows.delete(key); return undefined }),
-        clear: () => asyncRequest(() => { rows.clear(); return undefined }),
-      }),
-    }),
+    transaction: (_name: string, mode: IDBTransactionMode) => {
+      let pending = 0
+      let completionTimer: ReturnType<typeof setTimeout> | null = null
+      const before = new Map(rows)
+      const transaction: Record<string, unknown> = {
+        error: null,
+        oncomplete: null,
+        onabort: null,
+        onerror: null,
+      }
+
+      function finishLater() {
+        if (pending !== 0) return
+        if (completionTimer) clearTimeout(completionTimer)
+        completionTimer = setTimeout(() => {
+          completionTimer = null
+          if (pending !== 0) return
+          if (mode === 'readwrite' && abortNextReadwrite) {
+            abortNextReadwrite = false
+            rows.clear()
+            for (const [key, value] of before) rows.set(key, value)
+            transaction.error = new DOMException('Simulated transaction abort', 'AbortError')
+            ;(transaction.onabort as null | (() => void))?.()
+            return
+          }
+          ;(transaction.oncomplete as null | (() => void))?.()
+        }, 0)
+      }
+
+      function request<T>(action: () => T) {
+        pending += 1
+        if (completionTimer) {
+          clearTimeout(completionTimer)
+          completionTimer = null
+        }
+        const result: Record<string, unknown> = { result: undefined, error: null, onsuccess: null, onerror: null }
+        setTimeout(() => {
+          try {
+            result.result = action()
+            ;(result.onsuccess as null | (() => void))?.()
+          } catch (error) {
+            result.error = error
+            ;(result.onerror as null | (() => void))?.()
+          } finally {
+            pending -= 1
+            finishLater()
+          }
+        }, 0)
+        return result
+      }
+
+      transaction.objectStore = () => ({
+        get: (key: string) => request(() => rows.get(key)),
+        put: (value: { key: string }) => request(() => { rows.set(value.key, value); return value.key }),
+        delete: (key: string) => request(() => { rows.delete(key); return undefined }),
+        clear: () => request(() => { rows.clear(); return undefined }),
+      })
+      return transaction
+    },
     close: () => undefined,
   }
+
   const factory = {
     open: () => {
       const request: Record<string, unknown> = { result: database, error: null, onupgradeneeded: null, onsuccess: null, onerror: null, onblocked: null }
@@ -70,6 +110,7 @@ const draft: CampaignLocalDraft = {
 beforeEach(() => {
   rows.clear()
   storeCreated = false
+  abortNextReadwrite = false
   sessionStorage.clear()
   installFakeIndexedDb()
 })
@@ -89,20 +130,44 @@ it('persists a campaign draft outside sessionStorage and restores it after tab s
   const restored = await readCampaignDraftPersistent(key)
   expect(restored?.draft).toEqual(draft)
   expect(restored?.updatedAt).toBe(updatedAt)
+  expect(restored?.revision).toBe(1)
   expect(await readCampaignDraftPersistent(campaignDraftKey('user-b', 'workspace-a'))).toBeNull()
 })
 
-it('removes durable drafts on discard and sign-out cleanup without touching unrelated session data', async () => {
+it('refuses a stale revision instead of silently overwriting a newer tab save', async () => {
+  const key = campaignDraftKey('user-a', 'workspace-a')
+  const first = await saveCampaignDraftPersistent(key, draft, 0)
+  expect(first.status).toBe('saved')
+  if (first.status !== 'saved') throw new Error('Expected initial save')
+
+  const newer = { ...draft, messageTemplate: 'Newer tab edit' }
+  const second = await saveCampaignDraftPersistent(key, newer, first.revision)
+  expect(second.status).toBe('saved')
+
+  const stale = await saveCampaignDraftPersistent(key, { ...draft, messageTemplate: 'Stale tab edit' }, first.revision)
+  expect(stale.status).toBe('conflict')
+  if (stale.status !== 'conflict') throw new Error('Expected conflict')
+  expect(stale.current?.draft.messageTemplate).toBe('Newer tab edit')
+  expect((await readCampaignDraftPersistent(key))?.draft.messageTemplate).toBe('Newer tab edit')
+})
+
+it('does not report saved when the put request succeeds but the transaction later aborts', async () => {
+  const key = campaignDraftKey('user-a', 'workspace-a')
+  abortNextReadwrite = true
+  const result = await saveCampaignDraftPersistent(key, draft, 0)
+  expect(result.status).toBe('unavailable')
+  expect(await readCampaignDraftPersistent(key)).toBeNull()
+})
+
+it('awaits durable discard and sign-out cleanup instead of relying on a delay', async () => {
   const key = campaignDraftKey('user-a', 'workspace-a')
   await writeCampaignDraftPersistent(key, draft)
-  removeCampaignDraft(key)
-  await new Promise((resolve) => setTimeout(resolve, 10))
+  expect(await removeCampaignDraft(key)).toBe(true)
   expect(await readCampaignDraftPersistent(key)).toBeNull()
 
   await writeCampaignDraftPersistent(key, draft)
   sessionStorage.setItem('unrelated', 'keep')
-  clearCampaignDrafts()
-  await new Promise((resolve) => setTimeout(resolve, 10))
+  expect(await clearCampaignDrafts()).toBe(true)
   expect(await readCampaignDraftPersistent(key)).toBeNull()
   expect(sessionStorage.getItem('unrelated')).toBe('keep')
 })

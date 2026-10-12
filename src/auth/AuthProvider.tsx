@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState, type PropsWithChildren } from 'react'
 import type { Session, User } from '@supabase/supabase-js'
 import { clearCampaignDrafts } from '../lib/campaignDraftStorage'
+import { clearOfflineWorkspaceLocators } from '../lib/offlineWorkspaceLocator'
 import { supabase } from '../lib/supabase'
 
 interface SignUpInput {
@@ -49,7 +50,10 @@ export function AuthProvider({ children }: PropsWithChildren) {
     const { data: subscription } = supabase.auth.onAuthStateChange((event, nextSession) => {
       if (!active) return
       authEventReceived = true
-      if (event === 'SIGNED_OUT') clearCampaignDrafts()
+      if (event === 'SIGNED_OUT') {
+        void clearCampaignDrafts()
+        clearOfflineWorkspaceLocators()
+      }
       setSession(nextSession)
       setLoading(false)
     })
@@ -84,8 +88,10 @@ export function AuthProvider({ children }: PropsWithChildren) {
     },
     async signOut() {
       const client = requireSupabase()
+      await clearCampaignDrafts()
       const { error } = await client.auth.signOut()
       if (error) throw error
+      clearOfflineWorkspaceLocators()
     },
     async sendPasswordReset(email) {
       const client = requireSupabase()

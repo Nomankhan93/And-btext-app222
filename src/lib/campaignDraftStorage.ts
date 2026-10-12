@@ -25,13 +25,31 @@ export interface CampaignLocalDraft {
 export interface PersistentCampaignDraft {
   draft: CampaignLocalDraft
   updatedAt: string
+  revision: number
 }
+
+export interface SessionCampaignDraft {
+  draft: CampaignLocalDraft
+  updatedAt: string | null
+  revision: number
+}
+
+export type PersistentDraftReadResult =
+  | { status: 'found'; record: PersistentCampaignDraft }
+  | { status: 'missing' }
+  | { status: 'unavailable'; error: string }
+
+export type PersistentDraftSaveResult =
+  | { status: 'saved'; updatedAt: string; revision: number }
+  | { status: 'conflict'; current: PersistentCampaignDraft | null }
+  | { status: 'unavailable'; error: string }
 
 const prefix = 'bulktext:campaign:0186:'
 const databaseName = 'bulktext-offline-drafts'
 const storeName = 'campaignDrafts'
 const databaseVersion = 1
 const persistentSchemaVersion = 1
+const sessionSchemaVersion = 2
 const persistentJsonBudget = 20_000_000
 let persistentOperationQueue: Promise<unknown> = Promise.resolve()
 
@@ -45,6 +63,14 @@ interface PersistentDraftRecord {
   key: string
   schemaVersion: number
   updatedAt: string
+  revision?: number
+  draft: CampaignLocalDraft
+}
+
+interface SessionDraftRecord {
+  schemaVersion: number
+  updatedAt: string | null
+  revision: number
   draft: CampaignLocalDraft
 }
 
@@ -121,23 +147,51 @@ export function validateCampaignDraft(value: unknown): CampaignLocalDraft | null
   return value as CampaignLocalDraft
 }
 
-export function readCampaignDraft(key: string): CampaignLocalDraft | null {
+function validRevision(value: unknown): value is number {
+  return Number.isInteger(value) && Number(value) >= 0
+}
+
+export function campaignDraftsEqual(left: CampaignLocalDraft, right: CampaignLocalDraft) {
+  return JSON.stringify(left) === JSON.stringify(right)
+}
+
+export function readCampaignDraftSession(key: string): SessionCampaignDraft | null {
   try {
-    return validateCampaignDraft(JSON.parse(sessionStorage.getItem(key) ?? 'null'))
+    const parsed = JSON.parse(sessionStorage.getItem(key) ?? 'null') as unknown
+    if (!parsed || typeof parsed !== 'object') return null
+    const envelope = parsed as Partial<SessionDraftRecord>
+    if (envelope.schemaVersion === sessionSchemaVersion && validRevision(envelope.revision)) {
+      const draft = validateCampaignDraft(envelope.draft)
+      if (!draft) return null
+      return {
+        draft,
+        revision: envelope.revision,
+        updatedAt: typeof envelope.updatedAt === 'string' ? envelope.updatedAt : null,
+      }
+    }
+    // 0.18.10 / 0.18.10-a1 stored the raw draft directly in sessionStorage.
+    const legacyDraft = validateCampaignDraft(parsed)
+    return legacyDraft ? { draft: legacyDraft, revision: 0, updatedAt: null } : null
   } catch {
     return null
   }
 }
 
-export function writeCampaignDraft(key: string, value: CampaignLocalDraft): boolean {
+export function readCampaignDraft(key: string): CampaignLocalDraft | null {
+  return readCampaignDraftSession(key)?.draft ?? null
+}
+
+export function writeCampaignDraft(key: string, value: CampaignLocalDraft, revision = 0, updatedAt: string | null = new Date().toISOString()): boolean {
   try {
-    const json = JSON.stringify(value)
+    if (!validRevision(revision)) return false
+    const record: SessionDraftRecord = { schemaVersion: sessionSchemaVersion, updatedAt, revision, draft: value }
+    const json = JSON.stringify(record)
     if (json.length > 1_500_000) throw new Error('Draft exceeds tab storage budget')
     sessionStorage.setItem(key, json)
     return true
   } catch {
-    // IndexedDB is the durable 0.18.10 store. Never leave stale session data
-    // that could temporarily replace a newer persistent draft during hydration.
+    // IndexedDB is the durable store. Never leave stale session data that could
+    // be mistaken for a current local draft during reconciliation.
     try { sessionStorage.removeItem(key) } catch { /* storage unavailable */ }
     return false
   }
@@ -164,76 +218,175 @@ function requestResult<T>(request: IDBRequest<T>): Promise<T> {
   })
 }
 
-export async function readCampaignDraftPersistent(key: string): Promise<PersistentCampaignDraft | null> {
+function transactionComplete(transaction: IDBTransaction): Promise<void> {
+  return new Promise((resolve, reject) => {
+    let settled = false
+    const fail = (fallback: string) => {
+      if (settled) return
+      settled = true
+      reject(transaction.error ?? new Error(fallback))
+    }
+    transaction.oncomplete = () => {
+      if (settled) return
+      settled = true
+      resolve()
+    }
+    transaction.onabort = () => fail('IndexedDB transaction was aborted.')
+    transaction.onerror = () => fail('IndexedDB transaction failed.')
+  })
+}
+
+function parsePersistentRecord(value: unknown): PersistentCampaignDraft | null {
+  if (!value || typeof value !== 'object') return null
+  const record = value as Partial<PersistentDraftRecord>
+  if (record.schemaVersion !== persistentSchemaVersion || typeof record.updatedAt !== 'string') return null
+  const draft = validateCampaignDraft(record.draft)
+  if (!draft) return null
+  // 0.18.10 / a1 records had no revision. Treat that durable baseline as revision 0.
+  const revision = record.revision === undefined ? 0 : record.revision
+  if (!validRevision(revision)) return null
+  return { draft, updatedAt: record.updatedAt, revision }
+}
+
+async function readCampaignDraftPersistentNow(key: string): Promise<PersistentDraftReadResult> {
   let database: IDBDatabase | null = null
   try {
     database = await openDraftDatabase()
-    if (!database) return null
+    if (!database) return { status: 'unavailable', error: 'IndexedDB is unavailable in this browser.' }
     const transaction = database.transaction(storeName, 'readonly')
-    const record = await requestResult(transaction.objectStore(storeName).get(key)) as PersistentDraftRecord | undefined
-    if (!record || record.schemaVersion !== persistentSchemaVersion || typeof record.updatedAt !== 'string') return null
-    const draft = validateCampaignDraft(record.draft)
-    return draft ? { draft, updatedAt: record.updatedAt } : null
-  } catch {
-    return null
+    const completion = transactionComplete(transaction)
+    const raw = await requestResult(transaction.objectStore(storeName).get(key)) as PersistentDraftRecord | undefined
+    await completion
+    if (!raw) return { status: 'missing' }
+    const record = parsePersistentRecord(raw)
+    if (!record) return { status: 'unavailable', error: 'The saved device draft is invalid or uses an unsupported format.' }
+    return { status: 'found', record }
+  } catch (reason) {
+    return { status: 'unavailable', error: reason instanceof Error ? reason.message : 'IndexedDB could not be read.' }
   } finally {
     database?.close()
   }
 }
 
-async function writeCampaignDraftPersistentNow(key: string, draft: CampaignLocalDraft): Promise<string | null> {
+export function readCampaignDraftPersistentResult(key: string): Promise<PersistentDraftReadResult> {
+  return enqueuePersistentOperation(() => readCampaignDraftPersistentNow(key))
+}
+
+export async function readCampaignDraftPersistent(key: string): Promise<PersistentCampaignDraft | null> {
+  const result = await readCampaignDraftPersistentResult(key)
+  return result.status === 'found' ? result.record : null
+}
+
+async function saveCampaignDraftPersistentNow(key: string, draft: CampaignLocalDraft, expectedRevision: number): Promise<PersistentDraftSaveResult> {
   let database: IDBDatabase | null = null
   try {
-    if (!validateCampaignDraft(draft)) return null
+    if (!validateCampaignDraft(draft) || !validRevision(expectedRevision)) return { status: 'unavailable', error: 'The local campaign draft is invalid.' }
     const json = JSON.stringify(draft)
-    if (json.length > persistentJsonBudget) return null
+    if (json.length > persistentJsonBudget) return { status: 'unavailable', error: 'The local campaign draft exceeds the device storage budget.' }
     // JSON cloning normalizes null-prototype import row objects before structured clone.
     const normalized = JSON.parse(json) as CampaignLocalDraft
-    const updatedAt = new Date().toISOString()
     database = await openDraftDatabase()
-    if (!database) return null
+    if (!database) return { status: 'unavailable', error: 'IndexedDB is unavailable in this browser.' }
+
     const transaction = database.transaction(storeName, 'readwrite')
-    await requestResult(transaction.objectStore(storeName).put({
-      key,
-      schemaVersion: persistentSchemaVersion,
-      updatedAt,
-      draft: normalized,
-    } satisfies PersistentDraftRecord))
-    return updatedAt
-  } catch {
-    return null
+    const completion = transactionComplete(transaction)
+    const store = transaction.objectStore(storeName)
+    type OperationResult =
+      | { kind: 'saved'; updatedAt: string; revision: number }
+      | { kind: 'conflict'; current: PersistentCampaignDraft | null }
+      | { kind: 'invalid' }
+
+    // Keep the compare-and-swap read and put in the same IndexedDB request
+    // callback/task. This avoids transaction auto-close gaps in stricter
+    // browsers while preserving atomic revision checking across tabs.
+    const operation = new Promise<OperationResult>((resolve, reject) => {
+      const getRequest = store.get(key)
+      getRequest.onerror = () => reject(getRequest.error ?? new Error('IndexedDB request failed.'))
+      getRequest.onsuccess = () => {
+        const raw = getRequest.result as PersistentDraftRecord | undefined
+        const current = raw ? parsePersistentRecord(raw) : null
+        if (raw && !current) {
+          resolve({ kind: 'invalid' })
+          try { transaction.abort() } catch { /* transaction may already be closing */ }
+          return
+        }
+
+        const currentRevision = current?.revision ?? 0
+        if (currentRevision !== expectedRevision) {
+          resolve({ kind: 'conflict', current })
+          return
+        }
+
+        const updatedAt = new Date().toISOString()
+        const revision = currentRevision + 1
+        const putRequest = store.put({
+          key,
+          schemaVersion: persistentSchemaVersion,
+          updatedAt,
+          revision,
+          draft: normalized,
+        } satisfies PersistentDraftRecord)
+        putRequest.onerror = () => reject(putRequest.error ?? new Error('IndexedDB request failed.'))
+        putRequest.onsuccess = () => resolve({ kind: 'saved', updatedAt, revision })
+      }
+    })
+
+    const [result] = await Promise.all([operation, completion])
+    if (result.kind === 'saved') return { status: 'saved', updatedAt: result.updatedAt, revision: result.revision }
+    if (result.kind === 'conflict') return { status: 'conflict', current: result.current }
+    return { status: 'unavailable', error: 'The saved device draft is invalid or uses an unsupported format.' }
+  } catch (reason) {
+    return { status: 'unavailable', error: reason instanceof Error ? reason.message : 'IndexedDB could not save the draft.' }
   } finally {
     database?.close()
   }
 }
 
+export function saveCampaignDraftPersistent(key: string, draft: CampaignLocalDraft, expectedRevision: number): Promise<PersistentDraftSaveResult> {
+  return enqueuePersistentOperation(() => saveCampaignDraftPersistentNow(key, draft, expectedRevision))
+}
+
+// Compatibility helper for older call sites/tests. It still uses a CAS write;
+// callers that need conflict UI should use saveCampaignDraftPersistent directly.
 export function writeCampaignDraftPersistent(key: string, draft: CampaignLocalDraft): Promise<string | null> {
-  return enqueuePersistentOperation(() => writeCampaignDraftPersistentNow(key, draft))
+  return enqueuePersistentOperation(async () => {
+    const current = await readCampaignDraftPersistentNow(key)
+    if (current.status === 'unavailable') return null
+    const expectedRevision = current.status === 'found' ? current.record.revision : 0
+    const result = await saveCampaignDraftPersistentNow(key, draft, expectedRevision)
+    return result.status === 'saved' ? result.updatedAt : null
+  })
 }
 
-async function removeCampaignDraftPersistentNow(key: string) {
+async function removeCampaignDraftPersistentNow(key: string): Promise<boolean> {
   let database: IDBDatabase | null = null
   try {
     database = await openDraftDatabase()
-    if (!database) return
+    if (!database) return false
     const transaction = database.transaction(storeName, 'readwrite')
+    const completion = transactionComplete(transaction)
     await requestResult(transaction.objectStore(storeName).delete(key))
+    await completion
+    return true
   } catch {
-    // Local draft cleanup is best effort; server state must never depend on it.
+    return false
   } finally {
     database?.close()
   }
 }
 
-async function clearPersistentCampaignDraftsNow() {
+async function clearPersistentCampaignDraftsNow(): Promise<boolean> {
   let database: IDBDatabase | null = null
   try {
     database = await openDraftDatabase()
-    if (!database) return
+    if (!database) return false
     const transaction = database.transaction(storeName, 'readwrite')
+    const completion = transactionComplete(transaction)
     await requestResult(transaction.objectStore(storeName).clear())
+    await completion
+    return true
   } catch {
-    // Signing out must continue even if browser storage is unavailable.
+    return false
   } finally {
     database?.close()
   }
@@ -247,14 +400,14 @@ function clearPersistentCampaignDrafts() {
   return enqueuePersistentOperation(() => clearPersistentCampaignDraftsNow())
 }
 
-export function removeCampaignDraft(key: string) {
+export async function removeCampaignDraft(key: string): Promise<boolean> {
   try { sessionStorage.removeItem(key) } catch { /* storage unavailable */ }
-  void removeCampaignDraftPersistent(key)
+  return removeCampaignDraftPersistent(key)
 }
 
-export function clearCampaignDrafts() {
+export async function clearCampaignDrafts(): Promise<boolean> {
   try {
     for (const key of Object.keys(sessionStorage)) if (key.startsWith(prefix)) sessionStorage.removeItem(key)
   } catch { /* storage unavailable */ }
-  void clearPersistentCampaignDrafts()
+  return clearPersistentCampaignDrafts()
 }

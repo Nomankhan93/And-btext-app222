@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { StrictMode } from 'react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
@@ -26,7 +27,7 @@ vi.mock('../pwa/PwaProvider', () => ({
   }),
 }))
 vi.mock('../auth/AuthProvider', () => ({ useAuth: () => ({ user: mock.user }) }))
-vi.mock('../workspace/WorkspaceProvider', () => ({ useWorkspace: () => ({ workspace: { id: 'offline-workspace', name: 'Mine', slug: 'mine' } }) }))
+vi.mock('../workspace/WorkspaceProvider', () => ({ useWorkspace: () => ({ workspace: { id: 'offline-workspace', name: 'Mine', slug: 'mine' }, authority: 'server', loading: false, error: null, refresh: vi.fn() }) }))
 vi.mock('../lib/messageComposerApi', () => ({ getMessagePersonalizationSourceRows: mock.rows, saveMessageComposerDraft: mock.save }))
 
 const parsed = parseCsvText('Name,Mobile\nAli,03001234567', { fileName: 'contacts.csv', fileSha256: 'b'.repeat(64) })
@@ -86,4 +87,12 @@ it('keeps a prepared message editable offline, blocks server review, then reconc
   await waitFor(() => expect((screen.getByRole('button', { name: 'Review campaign' }) as HTMLButtonElement).disabled).toBe(false))
   expect((screen.getByRole('textbox', { name: /^SMS message/ }) as HTMLTextAreaElement).value).toBe('Edited offline for {{name}}')
   expect(screen.getByText(/Prepared recipient details last refreshed from the server/)).toBeTruthy()
+})
+
+
+it('keeps local autosave enabled after React StrictMode effect replay', async () => {
+  render(<StrictMode><App /></StrictMode>)
+  const name = await screen.findByRole('textbox', { name: 'Name' }) as HTMLInputElement
+  fireEvent.change(name, { target: { value: 'StrictMode edit survives' } })
+  await waitFor(() => expect(readCampaignDraft(key)?.campaignName).toBe('StrictMode edit survives'))
 })

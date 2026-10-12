@@ -11,7 +11,7 @@ const mock = vi.hoisted(() => ({
   parse: vi.fn(), imports: vi.fn(), validation: vi.fn(), preview: vi.fn(), consent: vi.fn(), snapshot: vi.fn(), snapshotRows: vi.fn(), rows: vi.fn(), save: vi.fn(), drafts: vi.fn(), devices: vi.fn(), confirm: vi.fn(), sources: vi.fn(), user: { id: 'user' },
 }))
 vi.mock('../auth/AuthProvider', () => ({ useAuth: () => ({ user: mock.user }) }))
-vi.mock('../workspace/WorkspaceProvider', () => ({ useWorkspace: () => ({ workspace: { id: 'workspace', name: 'Mine', slug: 'mine' } }) }))
+vi.mock('../workspace/WorkspaceProvider', () => ({ useWorkspace: () => ({ workspace: { id: 'workspace', name: 'Mine', slug: 'mine' }, authority: 'server', loading: false, error: null, refresh: vi.fn() }) }))
 vi.mock('../lib/importFiles', async (original) => ({ ...await original<object>(), parseSpreadsheetFile: mock.parse }))
 vi.mock('../lib/importsApi', () => ({ createContactImport: mock.imports }))
 vi.mock('../lib/recipientPreviewApi', () => ({ listImportValidationRows: mock.validation, createRecipientPreview: mock.preview }))
@@ -53,6 +53,7 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.restoreAllMocks() })
 it('preserves valid import on picker cancellation/failure and resets consent only on successful replacement', async () => {
   const view = render(<App />)
+  await waitFor(() => expect(view.container.querySelector('input[type=file]')).not.toBeNull())
   const input = view.container.querySelector('input[type=file]')!
   fireEvent.change(input, { target: { files: [new File([''], 'contacts.csv')] } })
   const consent = await screen.findByRole('checkbox')
@@ -73,21 +74,21 @@ it('restores a tab draft on remount, re-fetches recipient rows, and reuses the s
   await waitFor(() => expect((screen.getByRole('button', { name: 'Review campaign' }) as HTMLButtonElement).disabled).toBe(false))
   fireEvent.change(screen.getByRole('textbox', { name: 'Name' }), { target: { value: 'Edited title' } })
   view.unmount(); render(<App />)
-  expect((screen.getByRole('textbox', { name: 'Name' }) as HTMLInputElement).value).toBe('Edited title')
+  expect(((await screen.findByRole('textbox', { name: 'Name' })) as HTMLInputElement).value).toBe('Edited title')
   await waitFor(() => expect((screen.getByRole('button', { name: 'Review campaign' }) as HTMLButtonElement).disabled).toBe(false))
   fireEvent.click(screen.getByRole('button', { name: 'Review campaign' }))
   await screen.findByRole('heading', { name: 'Review & confirm' })
   expect(mock.save).toHaveBeenCalledWith(expect.objectContaining({ draftId: 'saved', title: 'Edited title', messageTemplate: ' Hello {{name}} ' }))
   expect(mock.rows.mock.calls.length).toBeGreaterThanOrEqual(3)
 })
-it('does not reveal another account’s tab draft', () => {
+it('does not reveal another account’s tab draft', async () => {
   seed(); mock.user = { id: 'other' }; render(<App />)
-  expect((screen.getByRole('textbox', { name: 'Name' }) as HTMLInputElement).value).toBe('')
+  expect(((await screen.findByRole('textbox', { name: 'Name' })) as HTMLInputElement).value).toBe('')
 })
 it('resumes an acknowledged preparation step after a later read fails without duplicating its import', async () => {
   seed({ prepared: null, draftId: null }); mock.validation.mockRejectedValueOnce(new Error('temporary read failure'))
   render(<App />)
-  fireEvent.click(screen.getByRole('checkbox'))
+  fireEvent.click(await screen.findByRole('checkbox'))
   fireEvent.click(screen.getByRole('button', { name: /Continue with/ }))
   await screen.findByText('temporary read failure')
   fireEvent.click(screen.getByRole('button', { name: /Continue with/ }))
@@ -100,7 +101,7 @@ it('does not continue preparation with further writes after the screen unmounts'
   let resolve!: (value: string) => void
   mock.imports.mockImplementationOnce(() => new Promise((done) => { resolve = done }))
   const view = render(<App />)
-  fireEvent.click(screen.getByRole('checkbox')); fireEvent.click(screen.getByRole('button', { name: /Continue with/ }))
+  fireEvent.click(await screen.findByRole('checkbox')); fireEvent.click(screen.getByRole('button', { name: /Continue with/ }))
   view.unmount()
   await act(async () => { resolve('import') })
   expect(mock.validation).not.toHaveBeenCalled()
