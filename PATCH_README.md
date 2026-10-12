@@ -1,23 +1,21 @@
-# Web 0.18.5 — Delivery & Recovery Contract Hardening
+# Web 0.18.6 — Draft Reliability, Imports & Campaign UX
 
-Current version 0.18.5; baseline 0.18.4. See docs/DELIVERY_RECOVERY_CONTRACT_0185.md for exact RPCs and transition rules, and VALIDATION_RESULTS.md for validation limits.
+Baseline: supplied Web 0.18.5 source. Backend contract: 0.18.5. No new migration, reset, automatic deployment or Android change.
 
-After applying the source patch:
+## Validate in WSL
 
 ```bash
-npm ci
-npm run validate
-npm run test:delivery-contract
-supabase migration list --linked
-supabase db push --linked --dry-run
+cd /home/noman/projects/bulktext-web-0.4.0
+nvm use &&
+npm ci &&
+npm run validate &&
+npm run test:delivery-contract &&
+node -p "require('./package.json').version" &&
+sha256sum -c SHA256SUMS.txt
 ```
 
-This project uses hosted Supabase. No `supabase start`, local migration or reset is required. The SQL contract test uses an isolated in-memory database only.
+Expected frontend version: 0.18.6. The SQL contract test runs in isolated in-memory PGlite and does not contact hosted Supabase or require a local Supabase stack. Deploy through your usual Web workflow after checks pass. Do not run a database reset or create a version-only migration.
 
-Verify the linked project and migration history. If the dry run lists only `20261010000100_delivery_recovery_contract_hardening.sql`, apply with `supabase db push --linked`. If other pending migrations or a different project appear, stop and review those first. Do not reset the database, edit old migrations or force migration-history repairs.
+See docs/DRAFT_IMPORT_CAMPAIGN_UX_0186.md for behavior, privacy/storage limits and acceptance steps. New campaign recovery is scoped to this browser tab and account/workspace; signing out clears it. If storage is unavailable or the list is too large, the UI warns and browser unload warns. Already-issued server writes may finish after navigation; ambiguous failures are not an exactly-once guarantee.
 
-Apply the database migration BEFORE deploying this Web build. Then execute supabase/verify_fresh_schema.sql in the hosted SQL editor for read-only metadata/grant checks.
-
-Keep Android 0.18.4 installed until the next consumer patch. SENT reporting remains supported. Legacy delivery callbacks are now unverified; historical unsupported DELIVERED claims become SENT without enabling resend. Phone-side recovery/outbox/blocked-job behavior requires Android 0.18.5.
-
-Migration rollback is forward-fix only: do not drop conflict/tombstone/recovery data or restore unsafe result-code-only delivery aggregation. If the Web deployment fails, the old Web can operate against retained v1 RPCs while the Web issue is fixed.
+The patch installer validates source/payload hashes, backs up changed originals, refuses modified/incompatible source, supports check-only/idempotent apply and rolls back caught write failures. It preserves .env, .env.example, git history and user data. Both documented 0.18.5 .env.example hash variants are supported, with the source checksum list adjusted to the preserved bytes. Never force-copy payload over a failed guard.

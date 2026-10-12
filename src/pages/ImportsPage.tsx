@@ -5,6 +5,7 @@ import { MAX_IMPORT_ROWS, parseSpreadsheetFile, type ParsedImportFile } from '..
 import { buildImportPreview, detectSmartImportMapping, type ImportColumnMapping, type SmartImportDetection } from '../lib/importMapping'
 import { createContactImport, deleteContactImport, listContactImports, type ContactImportSummary } from '../lib/importsApi'
 import { errorMessage } from '../lib/errors'
+import { useOperationGuard } from '../lib/useOperationGuard'
 import { useWorkspace } from '../workspace/WorkspaceProvider'
 
 const emptyMapping: ImportColumnMapping = { phone: '', firstName: null, lastName: null, displayName: null }
@@ -25,6 +26,10 @@ function optionalHeader(value: string): string | null {
 
 export function ImportsPage() {
   const { workspace } = useWorkspace()
+  return workspace ? <ImportForm key={workspace.id} /> : null
+}
+function ImportForm() {
+  const { workspace } = useWorkspace()
   const [parsed, setParsed] = useState<ParsedImportFile | null>(null)
   const [mapping, setMapping] = useState<ImportColumnMapping>(emptyMapping)
   const [detection, setDetection] = useState<SmartImportDetection | null>(null)
@@ -35,6 +40,8 @@ export function ImportsPage() {
   const [error, setError] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const canImport = true
+  const operation = useOperationGuard()
+  const historyGeneration = useRef(0)
 
   const preview = useMemo(() => parsed ? buildImportPreview(parsed, mapping) : null, [mapping, parsed])
 
@@ -44,13 +51,17 @@ export function ImportsPage() {
       setLoadingHistory(false)
       return
     }
+    const request = ++historyGeneration.current
     setLoadingHistory(true)
     try {
-      setImports(await listContactImports(workspace.id))
+      const next = await listContactImports(workspace.id)
+      if (operation.active.current && request === historyGeneration.current) setImports(next)
+    } catch (reason) {
+      if (operation.active.current && request === historyGeneration.current) setError(errorMessage(reason, 'Could not load import history.'))
     } finally {
-      setLoadingHistory(false)
+      if (operation.active.current && request === historyGeneration.current) setLoadingHistory(false)
     }
-  }, [workspace])
+  }, [workspace?.id])
 
   useEffect(() => {
     setParsed(null)
@@ -63,24 +74,24 @@ export function ImportsPage() {
   }, [refreshHistory])
 
   async function selectFile(file: File | null) {
+    if (!file || !operation.start()) return
     setError(null)
     setMessage(null)
-    setParsed(null)
-    setMapping(emptyMapping)
-    setDetection(null)
-    if (!file) return
     setBusy(true)
     try {
       const next = await parseSpreadsheetFile(file)
+      operation.check()
       const smart = detectSmartImportMapping(next)
       setParsed(next)
       setDetection(smart)
       setMapping(smart.mapping)
     } catch (reason) {
+      if (!operation.active.current) return
       setError(errorMessage(reason, 'Could not read the import file.'))
       if (inputRef.current) inputRef.current.value = ''
     } finally {
-      setBusy(false)
+      operation.finish()
+      if (operation.active.current) setBusy(false)
     }
   }
 
@@ -97,9 +108,11 @@ export function ImportsPage() {
       return
     }
 
+    if (!operation.start()) return
     setBusy(true)
     try {
       await createContactImport(workspace.id, parsed, mapping, preview.rows)
+      operation.check()
       setMessage(`${parsed.fileName} is ready for review. Use Validate & preview to resolve invalid or duplicate numbers.`)
       setParsed(null)
       setMapping(emptyMapping)
@@ -107,24 +120,28 @@ export function ImportsPage() {
       if (inputRef.current) inputRef.current.value = ''
       await refreshHistory()
     } catch (reason) {
+      if (!operation.active.current) return
       setError(errorMessage(reason, 'Could not prepare the upload.'))
     } finally {
-      setBusy(false)
+      operation.finish()
+      if (operation.active.current) setBusy(false)
     }
   }
 
   async function removeImport(item: ContactImportSummary) {
     if (!workspace) return
     const confirmed = window.confirm(`Delete staged import “${item.sourceFilename}”? This removes its staged rows only; no messages have been sent.`)
-    if (!confirmed) return
+    if (!confirmed || !operation.start()) return
     setBusy(true)
     setError(null)
     setMessage(null)
     try {
       await deleteContactImport(workspace.id, item.importId)
+      operation.check()
       setMessage(`${item.sourceFilename} was deleted.`)
       await refreshHistory()
     } catch (reason) {
+      if (!operation.active.current) return
       const message = errorMessage(reason, 'Could not delete the staged import.')
       if (message.includes('23503') || message.toLocaleLowerCase().includes('recipient preview history')) {
         setError('This upload already has saved review history, so BulkText retains it for audit. It will not affect a new campaign; use a new upload for the next campaign.')
@@ -132,7 +149,8 @@ export function ImportsPage() {
         setError(message)
       }
     } finally {
-      setBusy(false)
+      operation.finish()
+      if (operation.active.current) setBusy(false)
     }
   }
 
@@ -175,18 +193,19 @@ export function ImportsPage() {
             <article className="metric-card"><span>Needs review</span><h2>{preview.summary.invalidPhoneRows}</h2><p>{preview.summary.duplicatePhoneRows} additional valid rows repeat a number already present in this file.</p></article>
           </section>
 
+          {parsed.sheetName ? <p className="notice">Only worksheet “{parsed.sheetName}” is imported. Move the intended sheet first or export it as CSV to use another sheet.</p> : null}
           {parsed.truncated ? <div className="notice warning-notice">The file contains more than {MAX_IMPORT_ROWS.toLocaleString()} data rows. Preview is capped and staging is disabled; split the source file first.</div> : null}
 
           <section className="panel">
             <div className="panel-heading"><div><p className="eyebrow">Step 2</p><h2>Smart number detection</h2></div><span className={mapping.phone ? 'badge badge-success' : 'badge badge-warning'}>{mapping.phone ? 'Phone found' : 'Phone needs mapping'}</span></div>
             {detection ? <div className={detection.confidence === 'low' ? 'notice warning-notice' : 'notice success-notice'}><strong>Smart detection:</strong> {detection.message}</div> : null}
-            <details className="advanced-mapping" open={!mapping.phone}>
+            <details className="advanced-mapping" open={!mapping.phone || detection?.confidence === 'low'}>
               <summary>Advanced column mapping</summary>
             <div className="import-mapping-grid">
-              <label><span>Phone number *</span><select value={mapping.phone} onChange={(event) => setMapping((current) => ({ ...current, phone: event.target.value }))}><option value="">Select column…</option>{parsed.headers.map((header) => <option key={header} value={header}>{header}</option>)}</select></label>
-              <label><span>Full / display name</span><select value={mapping.displayName ?? ''} onChange={(event) => setMapping((current) => ({ ...current, displayName: optionalHeader(event.target.value) }))}><option value="">Not mapped</option>{parsed.headers.map((header) => <option key={header} value={header}>{header}</option>)}</select></label>
-              <label><span>First name</span><select value={mapping.firstName ?? ''} onChange={(event) => setMapping((current) => ({ ...current, firstName: optionalHeader(event.target.value) }))}><option value="">Not mapped</option>{parsed.headers.map((header) => <option key={header} value={header}>{header}</option>)}</select></label>
-              <label><span>Last name</span><select value={mapping.lastName ?? ''} onChange={(event) => setMapping((current) => ({ ...current, lastName: optionalHeader(event.target.value) }))}><option value="">Not mapped</option>{parsed.headers.map((header) => <option key={header} value={header}>{header}</option>)}</select></label>
+              <label><span>Phone number *</span><select disabled={busy} value={mapping.phone} onChange={(event) => setMapping((current) => ({ ...current, phone: event.target.value }))}><option value="">Select column…</option>{parsed.headers.map((header) => <option key={header} value={header}>{header}</option>)}</select></label>
+              <label><span>Full / display name</span><select disabled={busy} value={mapping.displayName ?? ''} onChange={(event) => setMapping((current) => ({ ...current, displayName: optionalHeader(event.target.value) }))}><option value="">Not mapped</option>{parsed.headers.map((header) => <option key={header} value={header}>{header}</option>)}</select></label>
+              <label><span>First name</span><select disabled={busy} value={mapping.firstName ?? ''} onChange={(event) => setMapping((current) => ({ ...current, firstName: optionalHeader(event.target.value) }))}><option value="">Not mapped</option>{parsed.headers.map((header) => <option key={header} value={header}>{header}</option>)}</select></label>
+              <label><span>Last name</span><select disabled={busy} value={mapping.lastName ?? ''} onChange={(event) => setMapping((current) => ({ ...current, lastName: optionalHeader(event.target.value) }))}><option value="">Not mapped</option>{parsed.headers.map((header) => <option key={header} value={header}>{header}</option>)}</select></label>
             </div>
             <p className="muted-copy import-custom-note">Unmapped columns are preserved as staged custom fields. They are not discarded.</p>
             </details>

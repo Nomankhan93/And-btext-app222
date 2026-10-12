@@ -23,12 +23,13 @@ export const MAX_IMPORT_COLUMNS = 100
 
 const textDecoder = new TextDecoder('utf-8')
 
-function normalizeHeader(value: string, index: number, seen: Map<string, number>): string {
+function normalizeHeader(value: string, index: number, seen: Set<string>): string {
   const base = value.trim() || `Column ${index + 1}`
-  const key = base.toLocaleLowerCase()
-  const count = (seen.get(key) ?? 0) + 1
-  seen.set(key, count)
-  return count === 1 ? base : `${base} (${count})`
+  let candidate = base
+  let count = 1
+  while (seen.has(candidate.toLowerCase())) candidate = `${base} (${++count})`
+  seen.add(candidate.toLowerCase())
+  return candidate
 }
 
 function isBlankRow(values: string[]): boolean {
@@ -54,8 +55,12 @@ function matrixToParsedRows(matrix: string[][], options: {
   const headerIndex = candidateHeaderIndex >= 0 ? candidateHeaderIndex : 0
   const headerRow = meaningful[headerIndex]
 
-  const seen = new Map<string, number>()
-  const headerWidth = Math.min(headerRow.row.length, MAX_IMPORT_COLUMNS)
+  if (candidateHeaderIndex < 0 && headerRow.row.some((value) => /^\+?(?:92|0)?3\d{9}$/.test(value.replace(/[\s()-]/g, '')))) {
+    throw new Error('This file appears to have no column headers. Add a header row (for example Name, Mobile) above the first recipient and upload again.')
+  }
+  const seen = new Set<string>()
+  const headerWidth = meaningful.slice(headerIndex).reduce((width, { row }) => Math.max(width, row.length), 0)
+  if (headerWidth > MAX_IMPORT_COLUMNS) throw new Error(`The file has more than ${MAX_IMPORT_COLUMNS} columns. Remove unused columns before importing.`)
   const rawHeaders = Array.from({ length: headerWidth }, (_, index) => headerRow.row[index] ?? '')
   const headers = rawHeaders.map((value, index) => normalizeHeader(value, index, seen))
   if (headers.length === 0) throw new Error('The import file does not contain a header row.')
@@ -63,7 +68,7 @@ function matrixToParsedRows(matrix: string[][], options: {
   const dataRows = meaningful.slice(headerIndex + 1)
   const limitedRows = dataRows.slice(0, MAX_IMPORT_ROWS)
   const rows: ParsedImportRow[] = limitedRows.map(({ row, sourceRowNumber }) => {
-    const values: Record<string, string> = {}
+    const values: Record<string, string> = Object.create(null)
     for (let columnIndex = 0; columnIndex < headers.length; columnIndex += 1) {
       values[headers[columnIndex]] = row[columnIndex] ?? ''
     }
@@ -94,7 +99,7 @@ function countDelimiterOutsideQuotes(line: string, delimiter: string): number {
 
 export function detectCsvDelimiter(text: string): ',' | ';' | '\t' {
   const candidates = [',', ';', '\t'] as const
-  const sampleLines = text.replace(/^\uFEFF/, '').split(/\r?\n/).filter((line) => line.trim()).slice(0, 5)
+  const sampleLines = text.replace(/^\uFEFF/, '').split(/\r\n|\r|\n/).filter((line) => line.trim()).slice(0, 5)
   if (sampleLines.length === 0) return ','
 
   let best: { delimiter: ',' | ';' | '\t'; score: number } = { delimiter: ',', score: -1 }
@@ -115,6 +120,7 @@ export function parseDelimitedText(text: string, delimiter: string): string[][] 
   let row: string[] = []
   let field = ''
   let quoted = false
+  let closedQuote = false
 
   for (let index = 0; index < source.length; index += 1) {
     const char = source[index]
@@ -125,6 +131,7 @@ export function parseDelimitedText(text: string, delimiter: string): string[][] 
           index += 1
         } else {
           quoted = false
+          closedQuote = true
         }
       } else {
         field += char
@@ -132,6 +139,7 @@ export function parseDelimitedText(text: string, delimiter: string): string[][] 
       continue
     }
 
+    if (closedQuote && char !== delimiter && char !== '\r' && char !== '\n') throw new Error('CSV has unexpected text after a quoted field. Export a fresh UTF-8 CSV.')
     if (char === '"' && field === '') {
       quoted = true
       continue
@@ -139,13 +147,16 @@ export function parseDelimitedText(text: string, delimiter: string): string[][] 
     if (char === delimiter) {
       row.push(field)
       field = ''
+      closedQuote = false
       continue
     }
-    if (char === '\n') {
+    if (char === '\n' || char === '\r') {
+      if (char === '\r' && source[index + 1] === '\n') index += 1
       row.push(field.replace(/\r$/, ''))
       rows.push(row)
       row = []
       field = ''
+      closedQuote = false
       continue
     }
     field += char
@@ -186,6 +197,7 @@ function u32(view: DataView, offset: number) {
 interface ZipEntry {
   name: string
   compressionMethod: number
+  uncompressedSize: number
   compressedSize: number
   localHeaderOffset: number
 }
@@ -208,7 +220,10 @@ function zipEntries(buffer: ArrayBuffer): Map<string, ZipEntry> {
   const entries = new Map<string, ZipEntry>()
 
   for (let index = 0; index < entriesCount; index += 1) {
+    if (offset + 46 > eocd) throw new Error('Invalid XLSX directory bounds.')
     if (u32(view, offset) !== 0x02014b50) throw new Error('Invalid XLSX archive: central-directory entry is malformed.')
+    if (u16(view, offset + 8) & 1) throw new Error('Password-protected XLSX files are not supported.')
+    const uncompressedSize = u32(view, offset + 24)
     const compressionMethod = u16(view, offset + 10)
     const compressedSize = u32(view, offset + 20)
     const nameLength = u16(view, offset + 28)
@@ -216,9 +231,11 @@ function zipEntries(buffer: ArrayBuffer): Map<string, ZipEntry> {
     const commentLength = u16(view, offset + 32)
     const localHeaderOffset = u32(view, offset + 42)
     const name = textDecoder.decode(bytes.subarray(offset + 46, offset + 46 + nameLength)).replace(/\\/g, '/')
-    entries.set(name, { name, compressionMethod, compressedSize, localHeaderOffset })
+    if (offset + 46 + nameLength + extraLength + commentLength > eocd || entries.has(name)) throw new Error('Invalid XLSX directory entry.')
+    entries.set(name, { name, compressionMethod, compressedSize, uncompressedSize, localHeaderOffset })
     offset += 46 + nameLength + extraLength + commentLength
   }
+  if ([...entries.values()].reduce((sum, entry) => sum + entry.uncompressedSize, 0) > 40 * 1024 * 1024) throw new Error('Expanded XLSX exceeds 40 MB. Export the recipient sheet as CSV.')
   return entries
 }
 
@@ -226,18 +243,39 @@ async function readZipEntry(buffer: ArrayBuffer, entry: ZipEntry): Promise<Uint8
   const view = new DataView(buffer)
   const bytes = new Uint8Array(buffer)
   const offset = entry.localHeaderOffset
+  if (offset + 30 > bytes.length) throw new Error('Invalid XLSX local header bounds.')
   if (u32(view, offset) !== 0x04034b50) throw new Error(`Invalid XLSX archive: local header for ${entry.name} is malformed.`)
   const nameLength = u16(view, offset + 26)
   const extraLength = u16(view, offset + 28)
   const start = offset + 30 + nameLength + extraLength
+  if (start + entry.compressedSize > bytes.length || entry.uncompressedSize > 20 * 1024 * 1024) throw new Error('XLSX worksheet is malformed or too large. Export it as CSV.')
   const compressed = bytes.slice(start, start + entry.compressedSize)
 
-  if (entry.compressionMethod === 0) return compressed
+  if (entry.compressionMethod === 0) {
+    if (compressed.length !== entry.uncompressedSize) throw new Error('Invalid XLSX entry size.')
+    return compressed
+  }
   if (entry.compressionMethod !== 8) throw new Error(`Unsupported XLSX compression method ${entry.compressionMethod}.`)
   if (typeof DecompressionStream === 'undefined') throw new Error('This browser cannot decompress XLSX files. Use CSV or a modern Chromium browser.')
 
   const stream = new Blob([compressed]).stream().pipeThrough(new DecompressionStream('deflate-raw'))
-  return new Uint8Array(await new Response(stream).arrayBuffer())
+  const reader = stream.getReader()
+  const chunks: Uint8Array[] = []
+  let length = 0
+  try {
+    while (true) {
+      const { value, done } = await reader.read()
+      if (done) break
+      length += value.length
+      if (length > entry.uncompressedSize || length > 20 * 1024 * 1024) throw new Error('Expanded XLSX worksheet is too large. Export it as CSV.')
+      chunks.push(value)
+    }
+  } finally { await reader.cancel() }
+  if (length !== entry.uncompressedSize) throw new Error('Invalid XLSX expanded entry size.')
+  const result = new Uint8Array(length)
+  let position = 0
+  for (const chunk of chunks) { result.set(chunk, position); position += chunk.length }
+  return result
 }
 
 function decodeXml(value: string): string {
@@ -276,7 +314,6 @@ function columnIndex(reference: string): number {
 function parseWorksheet(xml: string, sharedStrings: string[]): { rows: string[][]; rowNumbers: number[] } {
   const rows: string[][] = []
   const rowNumbers: number[] = []
-  let blankRun = 0
   let lastRowNumber = 0
   for (const rowMatch of xml.matchAll(/<row\b([^>]*)>([\s\S]*?)<\/row>/g)) {
     const row: string[] = []
@@ -289,7 +326,7 @@ function parseWorksheet(xml: string, sharedStrings: string[]): { rows: string[][
       const cellBody = cellMatch[2] ?? ''
       const reference = attribute(attrs, 'r') ?? ''
       const index = columnIndex(reference)
-      if (index < 0 || index >= MAX_IMPORT_COLUMNS) continue
+      if (index < 0) throw new Error('XLSX cell is missing its column reference. Export the sheet as CSV.')
       const type = attribute(attrs, 't')
       const rawValue = cellBody.match(/<v\b[^>]*>([\s\S]*?)<\/v>/)?.[1] ?? ''
       let value = ''
@@ -297,20 +334,16 @@ function parseWorksheet(xml: string, sharedStrings: string[]): { rows: string[][
       else if (type === 'inlineStr') value = Array.from(cellBody.matchAll(/<t\b[^>]*>([\s\S]*?)<\/t>/g), (item) => decodeXml(item[1])).join('')
       else if (type === 'b') value = rawValue === '1' ? 'TRUE' : 'FALSE'
       else value = decodeXml(rawValue)
+      if (index >= MAX_IMPORT_COLUMNS) {
+        if (value.trim()) throw new Error(`The worksheet has data beyond ${MAX_IMPORT_COLUMNS} columns. Remove unused columns before importing.`)
+        continue
+      }
       row[index] = value
     }
     const normalized = row.map((value) => value ?? '')
-    if (isBlankRow(normalized)) {
-      blankRun += 1
-      // Real-world XLSX files often contain hundreds of thousands of styled-but-empty rows.
-      // Once data has started, a long empty tail is treated as worksheet formatting rather than recipient data.
-      if (rows.length > 1 && blankRun >= 1000) break
-      continue
-    }
-    blankRun = 0
+    if (isBlankRow(normalized)) continue
     rows.push(normalized)
     rowNumbers.push(rowNumber)
-    if (rows.length >= MAX_IMPORT_ROWS + 2) break
   }
   return { rows, rowNumbers }
 }
@@ -367,6 +400,13 @@ export async function parseXlsxArrayBuffer(buffer: ArrayBuffer, options: {
   }, parsedWorksheet.rowNumbers)
 }
 
+export function decodeCsvBuffer(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer)
+  const encoding = bytes[0] === 0xff && bytes[1] === 0xfe ? 'utf-16le' : bytes[0] === 0xfe && bytes[1] === 0xff ? 'utf-16be' : 'utf-8'
+  try { return new TextDecoder(encoding, { fatal: true }).decode(buffer) }
+  catch { throw new Error('CSV encoding could not be read. Save the file as UTF-8 CSV and upload again.') }
+}
+
 export async function parseSpreadsheetFile(file: File): Promise<ParsedImportFile> {
   if (file.size > MAX_IMPORT_FILE_BYTES) throw new Error('Import file is larger than the 5 MB phase limit.')
   const extension = file.name.split('.').pop()?.toLowerCase()
@@ -374,7 +414,7 @@ export async function parseSpreadsheetFile(file: File): Promise<ParsedImportFile
   const fileSha256 = await sha256Hex(buffer)
 
   if (extension === 'csv') {
-    return parseCsvText(textDecoder.decode(buffer), { fileName: file.name, fileSizeBytes: file.size, fileSha256 })
+    return parseCsvText(decodeCsvBuffer(buffer), { fileName: file.name, fileSizeBytes: file.size, fileSha256 })
   }
   if (extension === 'xlsx') {
     return parseXlsxArrayBuffer(buffer, { fileName: file.name, fileSizeBytes: file.size, fileSha256 })

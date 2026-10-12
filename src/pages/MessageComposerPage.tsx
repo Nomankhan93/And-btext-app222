@@ -23,6 +23,9 @@ import {
   type MessageComposerDraft,
   type MessageComposerSource,
 } from '../lib/messageComposerApi'
+import { useAuth } from '../auth/AuthProvider'
+import { campaignDraftKey, readCampaignDraft, removeCampaignDraft } from '../lib/campaignDraftStorage'
+import { useOperationGuard } from '../lib/useOperationGuard'
 import { useWorkspace } from '../workspace/WorkspaceProvider'
 
 function dateTime(value: string) {
@@ -30,6 +33,11 @@ function dateTime(value: string) {
 }
 
 export function MessageComposerPage() {
+  const { workspace } = useWorkspace()
+  return workspace ? <ComposerForm key={workspace.id} /> : null
+}
+function ComposerForm() {
+  const { user } = useAuth()
   const { workspace } = useWorkspace()
   const [searchParams, setSearchParams] = useSearchParams()
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
@@ -46,6 +54,8 @@ export function MessageComposerPage() {
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const canEdit = true
+  const operation = useOperationGuard()
+  const loadedRequestedDraft = useRef<string | null>(null)
 
   const refresh = useCallback(async () => {
     if (!workspace) return
@@ -56,6 +66,7 @@ export function MessageComposerPage() {
         listMessageComposerSources(workspace.id),
         listMessageComposerDrafts(workspace.id),
       ])
+      operation.check()
       setSources(nextSources)
       setDrafts(nextDrafts)
       const requested = searchParams.get('snapshot')
@@ -65,8 +76,18 @@ export function MessageComposerPage() {
         : currentStillValid
           ? selectedSnapshotId
           : nextSources[0]?.eligibilitySnapshotId ?? ''
-      setSelectedSnapshotId(nextSnapshot)
+      const requestedDraft = searchParams.get('draft')
+      if (requestedDraft && loadedRequestedDraft.current !== requestedDraft) {
+        const saved = nextDrafts.find((item) => item.draftId === requestedDraft)
+        if (!saved) throw new Error('The requested draft was not found. Open another saved draft.')
+        setDraftId(saved.draftId)
+        setTitle(saved.title)
+        setMessageTemplate(saved.messageTemplate)
+        setSelectedSnapshotId(saved.eligibilitySnapshotId)
+        loadedRequestedDraft.current = requestedDraft
+      } else setSelectedSnapshotId(nextSnapshot)
     } catch (reason) {
+      if (!operation.active.current) return
       setError(errorMessage(reason, 'Could not load the message composer.'))
     } finally {
       setLoading(false)
@@ -81,6 +102,7 @@ export function MessageComposerPage() {
       return
     }
     let cancelled = false
+    setRows([])
     setSourceLoading(true)
     setError(null)
     void getMessagePersonalizationSourceRows(workspace.id, selectedSnapshotId)
@@ -88,8 +110,20 @@ export function MessageComposerPage() {
       .catch((reason) => { if (!cancelled) setError(errorMessage(reason, 'Could not load personalization recipients.')) })
       .finally(() => { if (!cancelled) setSourceLoading(false) })
     return () => { cancelled = true }
-  }, [workspace, selectedSnapshotId])
+  }, [workspace?.id, selectedSnapshotId])
 
+  useEffect(() => {
+    const requested = searchParams.get('draft')
+    if (!requested) { loadedRequestedDraft.current = null; return }
+    if (loading || loadedRequestedDraft.current === requested) return
+    const saved = drafts.find((item) => item.draftId === requested)
+    if (!saved) { setError('The requested draft was not found. Open another saved draft.'); return }
+    loadedRequestedDraft.current = requested
+    setDraftId(saved.draftId); setTitle(saved.title); setMessageTemplate(saved.messageTemplate); setSelectedSnapshotId(saved.eligibilitySnapshotId)
+  }, [searchParams, drafts, loading])
+
+  const savedDraft = drafts.find((item) => item.draftId === draftId)
+  const isSaved = Boolean(savedDraft && savedDraft.title === title && savedDraft.messageTemplate === messageTemplate && savedDraft.eligibilitySnapshotId === selectedSnapshotId)
   const selectedSource = useMemo(
     () => sources.find((source) => source.eligibilitySnapshotId === selectedSnapshotId) ?? null,
     [sources, selectedSnapshotId],
@@ -130,7 +164,7 @@ export function MessageComposerPage() {
   }
 
   async function saveDraft() {
-    if (!workspace || !selectedSnapshotId) return
+    if (!workspace || !selectedSnapshotId || !operation.start()) return
     setBusy(true)
     setError(null)
     setMessage(null)
@@ -142,37 +176,52 @@ export function MessageComposerPage() {
         title,
         messageTemplate,
       })
+      operation.check()
+      if (user) {
+        const key = campaignDraftKey(user.id, workspace.id)
+        if (readCampaignDraft(key)?.draftId === savedId) removeCampaignDraft(key)
+      }
       setDraftId(savedId)
-      setDrafts(await listMessageComposerDrafts(workspace.id))
+      const nextDrafts = await listMessageComposerDrafts(workspace.id)
+      operation.check()
+      setDrafts(nextDrafts)
       setMessage(hasRecipientProblem
         ? 'Draft saved. Some recipients still have missing personalization values; review them before confirming a campaign.'
         : 'Message draft saved. Nothing has been sent.')
     } catch (reason) {
+      if (!operation.active.current) return
       setError(errorMessage(reason, 'Could not save message draft.'))
     } finally {
-      setBusy(false)
+      operation.finish()
+      if (operation.active.current) setBusy(false)
     }
   }
 
   async function removeDraft(id: string) {
     if (!workspace) return
     if (!window.confirm('Delete this message draft? Your prepared recipients and consent records will not change.')) return
+    if (!operation.start()) return
     setBusy(true)
     setError(null)
     setMessage(null)
     try {
       await deleteMessageComposerDraft(workspace.id, id)
+      operation.check()
       if (draftId === id) {
         setDraftId(null)
         setTitle('')
         setMessageTemplate('Hello {{name}}, ')
       }
-      setDrafts(await listMessageComposerDrafts(workspace.id))
+      const nextDrafts = await listMessageComposerDrafts(workspace.id)
+      operation.check()
+      setDrafts(nextDrafts)
       setMessage('Message draft deleted.')
     } catch (reason) {
+      if (!operation.active.current) return
       setError(errorMessage(reason, 'Could not delete message draft.'))
     } finally {
-      setBusy(false)
+      operation.finish()
+      if (operation.active.current) setBusy(false)
     }
   }
 
@@ -192,6 +241,7 @@ export function MessageComposerPage() {
       setError('Prepare at least one eligible recipient list before starting a message draft.')
       return
     }
+    setSearchParams(selectedSnapshotId ? { snapshot: selectedSnapshotId } : {})
     setDraftId(null)
     setTitle('')
     setMessageTemplate('Hello {{name}}, ')
@@ -209,7 +259,7 @@ export function MessageComposerPage() {
           <h1>Write a message</h1>
           <p>Write and personalize your SMS, preview the final text for recipients and review estimated SMS usage before confirming a campaign.</p>
         </div>
-        {canEdit ? <button className="secondary-button compact-button" type="button" disabled={sources.length === 0} onClick={newDraft}>New draft</button> : null}
+        {canEdit ? <button className="secondary-button compact-button" type="button" disabled={busy || sources.length === 0} onClick={newDraft}>New draft</button> : null}
       </section>
 
       {error ? <div className="notice error-notice">{error}</div> : null}
@@ -222,7 +272,7 @@ export function MessageComposerPage() {
           <section className="panel">
             <div className="panel-heading"><div><p className="eyebrow">Recipients</p><h2>Ready recipient list</h2></div></div>
             <div className="form-grid composer-source-grid">
-              <label className="field"><span>Recipient list</span><select value={selectedSnapshotId} onChange={(event) => chooseSnapshot(event.target.value)}>{sources.map((source) => <option key={source.eligibilitySnapshotId} value={source.eligibilitySnapshotId}>{source.sourceFilename} · {source.eligibleRows} ready</option>)}</select></label>
+              <label className="field"><span>Recipient list</span><select disabled={busy} value={selectedSnapshotId} onChange={(event) => chooseSnapshot(event.target.value)}>{sources.map((source) => <option key={source.eligibilitySnapshotId} value={source.eligibilitySnapshotId}>{source.sourceFilename} · {source.eligibleRows} ready</option>)}</select></label>
               <div className="definition-card"><span>Source</span><strong>{selectedSource?.sourceFilename ?? '—'}</strong><small>Prepared recipient source</small></div>
               <div className="definition-card"><span>Recipients</span><strong>{selectedSource?.eligibleRows ?? 0}</strong><small>Only recipients that passed the current checks are included.</small></div>
               <div className="definition-card"><span>Prepared</span><strong>{selectedSource ? dateTime(selectedSource.snapshotCreatedAt) : '—'}</strong><small>Recipient list ready for drafting</small></div>
@@ -232,16 +282,16 @@ export function MessageComposerPage() {
           <section className="composer-grid">
             <div className="panel composer-editor-panel">
               <div className="panel-heading"><div><p className="eyebrow">Draft editor</p><h2>{draftId ? 'Edit message draft' : 'New message draft'}</h2></div>{draftId ? <span className="badge badge-success">Saved draft</span> : <span className="badge badge-muted">Unsaved</span>}</div>
-              <label className="field"><span>Draft title</span><input maxLength={120} value={title} disabled={!canEdit} onChange={(event) => setTitle(event.target.value)} placeholder="October service reminder" /></label>
-              <label className="field"><span>Message</span><textarea ref={textareaRef} rows={9} maxLength={MESSAGE_TEMPLATE_MAX_CHARACTERS} value={messageTemplate} disabled={!canEdit} onChange={(event) => setMessageTemplate(event.target.value)} placeholder="Hello {{name}}, your appointment is…" /><small>{messageTemplate.length} / {MESSAGE_TEMPLATE_MAX_CHARACTERS} template characters. Encoding and estimated SMS units update live below for every complete personalized recipient.</small></label>
+              <label className="field"><span>Draft title</span><input maxLength={120} value={title} disabled={!canEdit || busy} onChange={(event) => setTitle(event.target.value)} placeholder="October service reminder" /></label>
+              <label className="field"><span>Message</span><textarea ref={textareaRef} rows={9} maxLength={MESSAGE_TEMPLATE_MAX_CHARACTERS} value={messageTemplate} disabled={!canEdit || busy} onChange={(event) => setMessageTemplate(event.target.value)} placeholder="Hello {{name}}, your appointment is…" /><small>{messageTemplate.length} / {MESSAGE_TEMPLATE_MAX_CHARACTERS} template characters. Encoding and estimated SMS units update live below for every complete personalized recipient.</small></label>
 
               <div className="composer-token-section">
                 <span className="field-label">Built-in variables</span>
-                <div className="token-list">{builtInMessageTokens.map((token) => <button key={token} type="button" className="token-button" disabled={!canEdit} onClick={() => insertToken(token)}>{`{{${token}}}`}</button>)}</div>
+                <div className="token-list">{builtInMessageTokens.map((token) => <button key={token} type="button" className="token-button" disabled={!canEdit || busy} onClick={() => insertToken(token)}>{`{{${token}}}`}</button>)}</div>
               </div>
               <div className="composer-token-section">
                 <span className="field-label">Custom import fields</span>
-                {customKeys.length ? <div className="token-list">{customKeys.map((key) => <button key={key} type="button" className="token-button" disabled={!canEdit} onClick={() => insertToken(`custom:${key}`)}>{`{{custom:${key}}}`}</button>)}</div> : <p className="muted-copy">This recipient list has no custom import fields.</p>}
+                {customKeys.length ? <div className="token-list">{customKeys.map((key) => <button key={key} type="button" className="token-button" disabled={!canEdit || busy} onClick={() => insertToken(`custom:${key}`)}>{`{{custom:${key}}}`}</button>)}</div> : <p className="muted-copy">This recipient list has no custom import fields.</p>}
               </div>
 
               {analysis.malformed ? <div className="notice error-notice">Message contains unmatched or malformed <code>{'{{…}}'}</code> braces.</div> : null}
@@ -249,7 +299,8 @@ export function MessageComposerPage() {
               {unavailableCustomTokens.length ? <div className="notice warning-notice">These custom fields do not exist in the selected recipient snapshot: {unavailableCustomTokens.join(', ')}</div> : null}
               {hasRecipientProblem && !hasTemplateProblem ? <div className="notice warning-notice">{personalizationSummary.recipientsWithMissingValues} recipient(s) are missing at least one value used by this template. The preview below shows each missing token explicitly.</div> : null}
 
-              {canEdit ? <div className="recipient-actions"><button className="primary-button" type="button" disabled={busy || !selectedSnapshotId || !title.trim() || !messageTemplate.trim() || hasTemplateProblem} onClick={() => void saveDraft()}>{busy ? 'Saving…' : draftId ? 'Update draft' : 'Save draft'}</button>{draftId && !hasTemplateProblem && !hasRecipientProblem && smsUsage.readyRecipients > 0 ? <Link className="secondary-button" to={`/campaigns/review/${draftId}`}>Review &amp; confirm</Link> : null}</div> : null}
+              {draftId && !isSaved ? <p role="status" className="notice warning-notice">Unsaved changes. Update this draft before reviewing the campaign.</p> : null}
+              {canEdit ? <div className="recipient-actions"><button className="primary-button" type="button" disabled={busy || !selectedSnapshotId || !title.trim() || !messageTemplate.trim() || hasTemplateProblem} onClick={() => void saveDraft()}>{busy ? 'Saving…' : draftId ? 'Update draft' : 'Save draft'}</button>{draftId && isSaved && !busy && !sourceLoading && !hasTemplateProblem && !hasRecipientProblem && smsUsage.readyRecipients > 0 ? <Link className="secondary-button" to={`/campaigns/review/${draftId}`}>Review &amp; confirm</Link> : null}</div> : null}
             </div>
 
             <aside className="panel composer-summary-panel">
@@ -309,7 +360,7 @@ export function MessageComposerPage() {
         <div className="panel-heading"><div><p className="eyebrow">Saved work</p><h2>Message drafts</h2></div><span className="badge badge-muted">Editable</span></div>
         {drafts.length === 0 ? <EmptyState title="No message drafts">Save a personalized message draft to continue it later.</EmptyState> : (
           <div className="table-wrap"><table className="data-table"><thead><tr><th>Draft</th><th>Recipient source</th><th>Variables</th><th>Updated</th><th /></tr></thead><tbody>{drafts.map((draft) => (
-            <tr key={draft.draftId}><td><strong>{draft.title}</strong><small>{draft.messageTemplate.slice(0, 90)}{draft.messageTemplate.length > 90 ? '…' : ''}</small></td><td>{draft.sourceFilename}<small>{draft.eligibleRows} ready recipient{draft.eligibleRows === 1 ? '' : 's'}</small></td><td>{draft.templateVariables.length ? draft.templateVariables.join(', ') : 'None'}</td><td>{dateTime(draft.updatedAt)}</td><td><div className="recipient-actions"><button className="secondary-button compact-button" type="button" onClick={() => loadDraft(draft)}>Load</button>{canEdit ? <button className="text-button danger-text" type="button" disabled={busy} onClick={() => void removeDraft(draft.draftId)}>Delete</button> : null}</div></td></tr>
+            <tr key={draft.draftId}><td><strong>{draft.title}</strong><small>{draft.messageTemplate.slice(0, 90)}{draft.messageTemplate.length > 90 ? '…' : ''}</small></td><td>{draft.sourceFilename}<small>{draft.eligibleRows} ready recipient{draft.eligibleRows === 1 ? '' : 's'}</small></td><td>{draft.templateVariables.length ? draft.templateVariables.join(', ') : 'None'}</td><td>{dateTime(draft.updatedAt)}</td><td><div className="recipient-actions"><button className="secondary-button compact-button" type="button" disabled={busy} onClick={() => loadDraft(draft)}>Load</button>{canEdit ? <button className="text-button danger-text" type="button" disabled={busy} onClick={() => void removeDraft(draft.draftId)}>Delete</button> : null}</div></td></tr>
           ))}</tbody></table></div>
         )}
       </section>

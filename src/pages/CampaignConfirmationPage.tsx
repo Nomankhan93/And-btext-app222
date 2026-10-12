@@ -7,6 +7,9 @@ import { errorMessage } from '../lib/errors'
 import { listGatewayDevices, type GatewayDeviceSummary } from '../lib/gatewayDevices'
 import { getMessagePersonalizationSourceRows, listMessageComposerDrafts, type MessageComposerDraft } from '../lib/messageComposerApi'
 import { estimatePersonalizedSmsUsage } from '../lib/smsSegments'
+import { useOperationGuard } from '../lib/useOperationGuard'
+import { useAuth } from '../auth/AuthProvider'
+import { campaignDraftKey, readCampaignDraft, removeCampaignDraft } from '../lib/campaignDraftStorage'
 import { useWorkspace } from '../workspace/WorkspaceProvider'
 
 function dateTime(value: string | null) {
@@ -21,7 +24,16 @@ function phoneLabel(device: GatewayDeviceSummary) {
 export function CampaignConfirmationPage() {
   const { workspace } = useWorkspace()
   const { draftId = '' } = useParams()
+  return workspace ? <CampaignReview key={`${workspace.id}:${draftId}`} /> : null
+}
+function CampaignReview() {
+  const { workspace } = useWorkspace()
+  const { draftId = '' } = useParams()
   const navigate = useNavigate()
+  const { user } = useAuth()
+  const operation = useOperationGuard()
+  const [reload, setReload] = useState(0)
+  const [selectedDeviceId, setSelectedDeviceId] = useState('')
   const [draft, setDraft] = useState<MessageComposerDraft | null>(null)
   const [rows, setRows] = useState<Awaited<ReturnType<typeof getMessagePersonalizationSourceRows>>>([])
   const [devices, setDevices] = useState<GatewayDeviceSummary[]>([])
@@ -34,20 +46,28 @@ export function CampaignConfirmationPage() {
     let cancelled = false
     setLoading(true)
     setError(null)
+    setDraft(null)
+    setRows([])
+    setDevices([])
+    setSelectedDeviceId('')
     void Promise.all([listMessageComposerDrafts(workspace.id), listGatewayDevices(workspace.id)])
       .then(async ([drafts, nextDevices]) => {
         if (cancelled) return
         const nextDraft = drafts.find((item) => item.draftId === draftId) ?? null
+        const nextRows = nextDraft ? await getMessagePersonalizationSourceRows(workspace.id, nextDraft.eligibilitySnapshotId) : []
+        if (cancelled) return
         setDraft(nextDraft)
+        setRows(nextRows)
         setDevices(nextDevices)
-        if (nextDraft) setRows(await getMessagePersonalizationSourceRows(workspace.id, nextDraft.eligibilitySnapshotId))
+        const active = nextDevices.filter((device) => device.status === 'active')
+        if (active.length === 1) setSelectedDeviceId(active[0].deviceId)
       })
       .catch((reason) => { if (!cancelled) setError(errorMessage(reason, 'Could not prepare campaign confirmation.')) })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [workspace, draftId])
+  }, [workspace?.id, draftId, reload])
 
-  const activeDevice = useMemo(() => devices.find((device) => device.status === 'active') ?? null, [devices])
+  const activeDevice = useMemo(() => devices.find((device) => device.deviceId === selectedDeviceId && device.status === 'active') ?? null, [devices, selectedDeviceId])
   const usage = useMemo(() => estimatePersonalizedSmsUsage(draft?.messageTemplate ?? '', rows), [draft, rows])
   const readiness = useMemo(() => campaignConfirmationReadiness({ draftId: draft?.draftId ?? null, smsUsage: usage, device: activeDevice }), [draft, usage, activeDevice])
   const previews = useMemo(() => usage.recipients.filter((item) => item.estimate).slice(0, 10), [usage])
@@ -55,22 +75,33 @@ export function CampaignConfirmationPage() {
   async function confirm() {
     if (!workspace || !draft || !activeDevice || !readiness.ready) return
     if (!window.confirm('Confirm this campaign? The recipients, personalized messages, estimated SMS units, phone and selected SIM will be frozen and cannot be edited.')) return
+    if (!operation.start()) return
     setBusy(true)
     setError(null)
     try {
       const campaignId = await confirmCampaign(workspace.id, draft.draftId, activeDevice.deviceId)
+      operation.check()
+      if (user) {
+        const key = campaignDraftKey(user.id, workspace.id)
+        if (readCampaignDraft(key)?.draftId === draft.draftId) removeCampaignDraft(key)
+      }
       navigate(`/campaigns/${campaignId}`, { replace: true })
     } catch (reason) {
+      if (!operation.active.current) return
       setError(errorMessage(reason, 'Could not confirm the campaign.'))
     } finally {
-      setBusy(false)
+      operation.finish()
+      if (operation.active.current) setBusy(false)
     }
   }
 
   if (!workspace) return null
   if (loading) return <LoadingState label="Preparing campaign review…" />
-  if (!draft) return <EmptyState title="Draft not found">Choose a saved message draft before reviewing a campaign.</EmptyState>
+  if (!draft) return <div className="page-stack">{error ? <div role="alert" className="notice error-notice">{error}</div> : <EmptyState title="Draft not found">Choose a saved message draft before reviewing a campaign.</EmptyState>}<div className="button-row"><button type="button" className="secondary-button" onClick={() => setReload((value) => value + 1)}>Retry review</button><Link to="/composer">Open saved drafts</Link></div></div>
 
+  const localKey = user ? campaignDraftKey(user.id, workspace.id) : null
+  const editUrl = localKey && readCampaignDraft(localKey)?.draftId === draft.draftId
+    ? '/campaigns/new' : `/composer?snapshot=${draft.eligibilitySnapshotId}&draft=${draft.draftId}`
   return (
     <div className="page-stack">
       <section className="page-heading recipient-heading">
@@ -79,7 +110,7 @@ export function CampaignConfirmationPage() {
           <h1>Review &amp; confirm</h1>
           <p>Check the exact recipients, personalized messages, estimated SMS usage, phone and SIM that will be frozen for this campaign.</p>
         </div>
-        <Link className="secondary-button" to={`/composer?snapshot=${draft.eligibilitySnapshotId}&draft=${draft.draftId}`}>Edit draft</Link>
+        <Link className="secondary-button" to={editUrl}>Edit draft</Link>
       </section>
 
       {error ? <div className="notice error-notice">{error}</div> : null}
@@ -100,14 +131,15 @@ export function CampaignConfirmationPage() {
 
       <section className="panel">
         <div className="panel-heading"><div><p className="eyebrow">Phone &amp; SIM</p><h2>Sending identity snapshot</h2></div></div>
+        <label className="field"><span>Sending phone</span><select disabled={busy} value={selectedDeviceId} onChange={(event) => setSelectedDeviceId(event.target.value)}><option value="">Select a paired phone…</option>{devices.filter((device) => device.status === 'active').map((device) => <option key={device.deviceId} value={device.deviceId}>{device.displayName} · {phoneLabel(device)} · {device.boundCarrierName || 'SIM not ready'}</option>)}</select></label>
         {activeDevice ? (
           <div className="definition-grid confirmation-device-grid">
             <div><dt>Phone</dt><dd>{phoneLabel(activeDevice)}</dd></div>
-            <div><dt>Status</dt><dd>{activeDevice.status === 'active' ? 'Connected' : activeDevice.status}</dd></div>
+            <div><dt>Status</dt><dd>{activeDevice.status === 'active' ? 'Paired' : activeDevice.status}</dd></div>
             <div><dt>Selected SIM</dt><dd>{activeDevice.boundCarrierName || 'No SIM selected'}{activeDevice.boundSlotIndex == null ? '' : ` · SIM ${activeDevice.boundSlotIndex + 1}`}</dd></div>
             <div><dt>Last seen</dt><dd>{dateTime(activeDevice.lastSeenAt)}</dd></div>
           </div>
-        ) : <EmptyState title="No Android phone paired">Pair your Android phone before confirming a campaign.</EmptyState>}
+        ) : <EmptyState title="Select a sending phone">Select an active paired phone above, or open Phone &amp; SIM to pair one.</EmptyState>}
         <p className="muted-copy">Confirmation freezes this phone and SIM reference. A later SIM change will require fresh send authorization; BulkText never silently falls back to another SIM.</p>
         {!activeDevice || activeDevice.bindingStatus !== 'ready' ? <Link className="primary-link inline-action" to="/devices">Open Phone &amp; SIM</Link> : null}
       </section>
@@ -125,7 +157,7 @@ export function CampaignConfirmationPage() {
 
       <section className="panel confirmation-action-panel">
         <div><p className="eyebrow">Immutable confirmation</p><h2>Freeze this campaign</h2><p className="muted-copy">After confirmation, edits to the source file, recipient preparation or message draft do not change this campaign snapshot. Confirmation itself sends nothing; the next screen performs the exact-SIM Web → Android handoff.</p></div>
-        <button className="primary-button" type="button" disabled={!readiness.ready || busy} onClick={() => void confirm()}>{busy ? 'Confirming…' : 'Confirm & continue to send'}</button>
+        <button className="primary-button" type="button" disabled={!readiness.ready || busy} onClick={() => void confirm()}>{busy ? 'Confirming…' : 'Confirm campaign'}</button>
       </section>
     </div>
   )

@@ -196,10 +196,13 @@ def main() -> int:
         raise SystemExit('No Supabase migrations found; release version cannot be verified')
     latest_migration = migrations[-1]
     latest_text = latest_migration.read_text(encoding='utf-8')
-    version_marker = f"'version', '{version}'"
+    backend_version = package.get('bulktext', {}).get('backendContractVersion', version)
+    if not re.fullmatch(r'\d+\.\d+\.\d+', backend_version):
+        raise SystemExit('Invalid backend contract version')
+    version_marker = f"'version', '{backend_version}'"
     if version_marker not in latest_text:
         raise SystemExit(
-            f'Latest migration {latest_migration.name} does not declare app_meta version {version}'
+            f'Latest migration {latest_migration.name} does not declare backend contract version {backend_version}'
         )
 
     output_dir = Path(args.output_dir).resolve() if args.output_dir else root.parent / 'release'

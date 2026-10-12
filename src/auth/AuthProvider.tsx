@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState, type PropsWithChildren } from 'react'
 import type { Session, User } from '@supabase/supabase-js'
+import { clearCampaignDrafts } from '../lib/campaignDraftStorage'
 import { supabase } from '../lib/supabase'
 
 interface SignUpInput {
@@ -37,14 +38,18 @@ export function AuthProvider({ children }: PropsWithChildren) {
     }
 
     let active = true
+    let authEventReceived = false
     void supabase.auth.getSession().then(({ data }) => {
-      if (active) {
+      if (active && !authEventReceived) {
         setSession(data.session)
         setLoading(false)
       }
-    })
+    }).catch(() => { if (active && !authEventReceived) setLoading(false) })
 
-    const { data: subscription } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+    const { data: subscription } = supabase.auth.onAuthStateChange((event, nextSession) => {
+      if (!active) return
+      authEventReceived = true
+      if (event === 'SIGNED_OUT') clearCampaignDrafts()
       setSession(nextSession)
       setLoading(false)
     })

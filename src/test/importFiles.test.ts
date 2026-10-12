@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { detectCsvDelimiter, parseCsvText, parseDelimitedText, parseXlsxArrayBuffer } from '../lib/importFiles'
+import { decodeCsvBuffer, detectCsvDelimiter, parseCsvText, parseDelimitedText, parseXlsxArrayBuffer } from '../lib/importFiles'
 
 function concat(chunks: Uint8Array[]): Uint8Array {
   const length = chunks.reduce((sum, chunk) => sum + chunk.length, 0)
@@ -133,4 +133,63 @@ describe('XLSX import parsing', () => {
     expect(parsed.rows[0].values.Contact).toBe('923041013222')
   })
 
+})
+
+describe('0.18.6 import regressions', () => {
+  it('preserves colliding explicit/generated headers and prototype-named columns', () => {
+    const parsed = parseCsvText('Mobile,Mobile,Mobile (2),__proto__\n03001234567,03111234567,03221234567,VIP')
+    expect(new Set(parsed.headers.map((h) => h.toLowerCase())).size).toBe(4)
+    expect(Object.values(parsed.rows[0].values)).toEqual(['03001234567', '03111234567', '03221234567', 'VIP'])
+  })
+  it('preserves data columns wider than the header and supports CR-only exports', () => {
+    const parsed = parseCsvText('Mobile\r03001234567,Ali\r03111234567,Sara')
+    expect(parsed.headers).toEqual(['Mobile', 'Column 2'])
+    expect(parsed.rows).toHaveLength(2)
+    expect(parsed.rows[1].values['Column 2']).toBe('Sara')
+  })
+  it('rejects headerless contacts and excessive columns instead of silently losing data', () => {
+    expect(() => parseCsvText('03001234567,Ali\n03111234567,Sara')).toThrow(/headers/)
+    expect(() => parseCsvText('Mobile,' + Array(100).fill('Extra').join(',') + '\n03001234567')).toThrow(/100 columns/)
+  })
+  function workbook(sheet: string) {
+    return storedZip([
+      ['xl/workbook.xml', '<workbook><sheets><sheet name="Data" r:id="id"/></sheets></workbook>'],
+      ['xl/_rels/workbook.xml.rels', '<Relationships><Relationship Id="id" Target="worksheets/sheet1.xml"/></Relationships>'],
+      ['xl/worksheets/sheet1.xml', `<worksheet><sheetData>${sheet}</sheetData></worksheet>`],
+    ])
+  }
+  function row(n: number, value: string) { return `<row r="${n}"><c r="A${n}" t="inlineStr"><is><t>${value}</t></is></c></row>` }
+  it('reads recipients beyond long styled blank gaps', async () => {
+    const blanks = Array.from({ length: 1001 }, (_, i) => row(i + 3, '')).join('')
+    const parsed = await parseXlsxArrayBuffer(workbook(row(1, 'Mobile') + row(2, '03001234567') + blanks + row(1004, '03111234567')), { fileSha256: 'x' })
+    expect(parsed.rows.map((r) => r.sourceRowNumber)).toEqual([2, 1004])
+  })
+  it('detects overflow after a preamble instead of accepting an incomplete worksheet', async () => {
+    const preamble = Array.from({ length: 19 }, (_, i) => row(i + 1, 'Export title')).join('')
+    const data = Array.from({ length: 5001 }, (_, i) => row(i + 21, '03001234567')).join('')
+    const parsed = await parseXlsxArrayBuffer(workbook(preamble + row(20, 'Mobile') + data), { fileSha256: 'x' })
+    expect(parsed.truncated).toBe(true)
+    expect(parsed.sourceRowCount).toBe(5001)
+    expect(parsed.rows).toHaveLength(5000)
+  })
+  it('rejects out-of-bounds XLSX directories and oversized expanded entries', async () => {
+    const buffer = workbook(row(1, 'Mobile'))
+    const view = new DataView(buffer)
+    view.setUint32(buffer.byteLength - 6, 0xfffffff0, true)
+    await expect(parseXlsxArrayBuffer(buffer)).rejects.toThrow(/bounds/)
+    const large = workbook(row(1, 'Mobile'))
+    const bytes = new DataView(large)
+    const central = bytes.getUint32(large.byteLength - 6, true)
+    bytes.setUint32(central + 24, 50 * 1024 * 1024, true)
+    await expect(parseXlsxArrayBuffer(large)).rejects.toThrow(/40 MB/)
+  })
+})
+
+it('decodes BOM-marked UTF-16 CSV and rejects invalid UTF-8 rather than replacing characters', () => {
+  const text = 'Mobile\r\n03001234567'
+  const bytes = new Uint8Array(2 + text.length * 2); bytes.set([255, 254])
+  for (let i = 0; i < text.length; i++) bytes[2 + i * 2] = text.charCodeAt(i)
+  expect(decodeCsvBuffer(bytes.buffer)).toBe(text)
+  expect(() => decodeCsvBuffer(new Uint8Array([0xff, 0xff]).buffer)).toThrow(/UTF-8/)
+  expect(() => parseCsvText('Mobile\n"03001234567"junk')).toThrow(/quoted field/)
 })

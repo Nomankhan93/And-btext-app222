@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { PairingQr } from '../components/PairingQr'
 import { EmptyState, ErrorState, LoadingState } from '../components/StateViews'
 import { errorMessage } from '../lib/errors'
@@ -8,15 +8,13 @@ import {
   createGatewayPairing,
   gatewayBindingLabel,
   gatewayHealthLabel,
-  listGatewayDevices,
-  listGatewayPairingSessions,
   revokeGatewayDevice,
   revokeGatewayPairing,
   type CreatedGatewayPairing,
   type GatewayDeviceSummary,
-  type GatewayPairingSession,
   type GatewaySimSummary,
 } from '../lib/gatewayDevices'
+import { useGatewayLiveStatus } from '../lib/useGatewayLiveStatus'
 import { formatPairingCode } from '../lib/pairingQr'
 import { useWorkspace } from '../workspace/WorkspaceProvider'
 
@@ -39,39 +37,29 @@ function simLabel(sim: GatewaySimSummary) {
 
 export function DevicesPage() {
   const { workspace } = useWorkspace()
-  const [devices, setDevices] = useState<GatewayDeviceSummary[]>([])
-  const [sessions, setSessions] = useState<GatewayPairingSession[]>([])
+  return workspace ? <DeviceWorkspace key={workspace.id} workspace={workspace} /> : null
+}
+
+function DeviceWorkspace({ workspace }: { workspace: { id: string } }) {
   const [pairing, setPairing] = useState<CreatedGatewayPairing | null>(null)
-  const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
 
+  const { devices, sessions, loading, fetching, syncError, refresh } = useGatewayLiveStatus(workspace.id, busy)
   const canManage = true
   const activeDevices = useMemo(() => devices.filter((device) => device.status === 'active'), [devices])
   const readyDevices = useMemo(() => activeDevices.filter((device) => device.bindingStatus === 'ready'), [activeDevices])
   const detectedSims = useMemo(() => activeDevices.reduce((total, device) => total + device.sims.filter((sim) => sim.present).length, 0), [activeDevices])
 
-  const refresh = useCallback(async () => {
-    if (!workspace) return
-    setLoading(true)
-    setError(null)
-    try {
-      const nextDevices = await listGatewayDevices(workspace.id)
-      setDevices(nextDevices)
-      setSessions(await listGatewayPairingSessions(workspace.id))
-    } catch (reason) {
-      setError(errorMessage(reason, 'Could not load your Android phone.'))
-    } finally {
-      setLoading(false)
-    }
-  }, [workspace])
-
   useEffect(() => {
-    setPairing(null)
-    setMessage(null)
-    void refresh()
-  }, [refresh])
+    if (!pairing) return
+    const session = sessions.find((item) => item.pairingId === pairing.pairingId)
+    if (session && session.status !== 'pending') {
+      setPairing(null)
+      setMessage(session.status === 'claimed' ? 'Phone paired. SIM details update automatically after Android permissions are granted.' : `Pairing code ${session.status}. Generate a new code if needed.`)
+    }
+  }, [sessions, pairing])
 
   async function generatePairing() {
     if (!workspace || !canManage) return
@@ -82,7 +70,6 @@ export function DevicesPage() {
       const created = await createGatewayPairing(workspace.id)
       setPairing(created)
       setMessage('Pairing code generated. It expires in 10 minutes and can be used once.')
-      await refresh()
     } catch (reason) {
       setError(errorMessage(reason, 'Could not generate a pairing code.'))
     } finally {
@@ -98,7 +85,6 @@ export function DevicesPage() {
       await revokeGatewayPairing(pairing.pairingId)
       setPairing(null)
       setMessage('Pairing code revoked.')
-      await refresh()
     } catch (reason) {
       setError(errorMessage(reason, 'Could not revoke the pairing code.'))
     } finally {
@@ -123,7 +109,6 @@ export function DevicesPage() {
     try {
       await bindGatewaySim(workspace.id, device.deviceId, sim.simId)
       setMessage(`${simLabel(sim)} is now the selected SIM for ${device.displayName}.`)
-      await refresh()
     } catch (reason) {
       setError(errorMessage(reason, 'Could not bind the selected SIM.'))
     } finally {
@@ -139,7 +124,6 @@ export function DevicesPage() {
     try {
       await clearGatewaySimBinding(workspace.id, device.deviceId)
       setMessage(`SIM selection cleared for ${device.displayName}.`)
-      await refresh()
     } catch (reason) {
       setError(errorMessage(reason, 'Could not clear the SIM binding.'))
     } finally {
@@ -157,7 +141,6 @@ export function DevicesPage() {
     try {
       await revokeGatewayDevice(workspace.id, device.deviceId)
       setMessage(`${device.displayName} disconnected.`)
-      await refresh()
     } catch (reason) {
       setError(errorMessage(reason, 'Could not disconnect the phone.'))
     } finally {
@@ -175,9 +158,10 @@ export function DevicesPage() {
           <h1>Phone &amp; SIM</h1>
           <p>Connect your Android phone and explicitly choose the SIM BulkText may use. If that SIM is removed or changed, sending remains blocked until you select a SIM again.</p>
         </div>
-        <button className="secondary-button" type="button" disabled={loading || busy} onClick={() => void refresh()}>Refresh</button>
+        <button className="secondary-button" type="button" disabled={fetching || busy} onClick={() => void refresh()}>Refresh</button>
       </section>
 
+      <p className="muted-copy" role="status">{syncError ?? 'Phone and SIM details refresh automatically while this page is visible.'}</p>
       {error ? <ErrorState title="Device operation failed">{error}</ErrorState> : null}
       {message ? <div className="notice success-notice">{message}</div> : null}
 

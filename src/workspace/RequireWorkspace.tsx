@@ -5,7 +5,7 @@ import { useWorkspace } from './WorkspaceProvider'
 export function RequireWorkspace() {
   const { workspace, loading, error, refresh } = useWorkspace()
 
-  if (loading) return <LoadingState label="Preparing your BulkText account…" />
+  if (loading && !workspace) return <LoadingState label="Preparing your BulkText account…" />
   if (!workspace) {
     return (
       <main className="auth-shell">
@@ -16,5 +16,5 @@ export function RequireWorkspace() {
       </main>
     )
   }
-  return <Outlet />
+  return <div key={workspace.id}>{error ? <div role="status" className="notice warning-notice">Account refresh failed. Your open form is preserved. <button type="button" disabled={loading} onClick={() => void refresh()}>Retry</button></div> : null}<Outlet /></div>
 }
