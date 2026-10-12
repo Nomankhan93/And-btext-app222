@@ -117,6 +117,7 @@ function CampaignForm({ storageKey }: { storageKey: string }) {
   const canReview = Boolean(
     !restoring && prepared && campaignName.trim() && messageTemplate.trim() && !templateAnalysis.malformed && templateAnalysis.unsupportedTokens.length === 0 && usage.readyRecipients > 0 && usage.blockedRecipients === 0,
   )
+  const currentStep = !parsed ? 1 : !prepared ? 2 : canReview ? 4 : 3
 
   async function selectFile(file: File | null) {
     if (!file || !operation.start()) return
@@ -243,11 +244,11 @@ function CampaignForm({ storageKey }: { storageKey: string }) {
       {error ? <div className="notice error-notice">{error}</div> : null}
       {notice ? <div className="notice success-notice">{notice}</div> : null}
 
-      <ol className="simple-stepper" aria-label="Campaign steps">
-        <li className="active"><span>1</span>Campaign</li>
-        <li className={parsed ? 'active' : ''}><span>2</span>Recipients</li>
-        <li className={prepared ? 'active' : ''}><span>3</span>Message</li>
-        <li><span>4</span>Review &amp; send</li>
+      <ol className="simple-stepper" aria-label="Campaign progress">
+        <li className={currentStep === 1 ? 'active' : currentStep > 1 ? 'completed' : ''} aria-current={currentStep === 1 ? 'step' : undefined}><span>1</span><strong>Campaign</strong></li>
+        <li className={currentStep === 2 ? 'active' : currentStep > 2 ? 'completed' : ''} aria-current={currentStep === 2 ? 'step' : undefined}><span>2</span><strong>Recipients</strong></li>
+        <li className={currentStep === 3 ? 'active' : currentStep > 3 ? 'completed' : ''} aria-current={currentStep === 3 ? 'step' : undefined}><span>3</span><strong>Message</strong></li>
+        <li className={currentStep === 4 ? 'active' : ''} aria-current={currentStep === 4 ? 'step' : undefined}><span>4</span><strong>Review</strong></li>
       </ol>
 
       <section className="panel simple-campaign-section">
@@ -266,17 +267,23 @@ function CampaignForm({ storageKey }: { storageKey: string }) {
         </div>
 
         {parsed && preview && detection ? <>
-          <div className="metric-grid import-metrics simple-import-summary">
-            <article className="metric-card"><span>Rows</span><h2>{parsed.sourceRowCount.toLocaleString()}</h2><p>{parsed.fileName} · {bytesLabel(parsed.fileSizeBytes)}{parsed.sheetName ? ` · ${parsed.sheetName}` : ''}</p></article>
-            <article className="metric-card"><span>Numbers found</span><h2>{preview.summary.validPhoneRows.toLocaleString()}</h2><p>{uniqueReady.toLocaleString()} unique valid recipient{uniqueReady === 1 ? '' : 's'}.</p></article>
-            <article className="metric-card"><span>Auto-cleaned</span><h2>{preview.summary.duplicatePhoneRows.toLocaleString()}</h2><p>Duplicate rows excluded automatically.</p></article>
-            <article className="metric-card"><span>Invalid</span><h2>{preview.summary.invalidPhoneRows.toLocaleString()}</h2><p>Invalid/non-mobile values will not be selected.</p></article>
-          </div>
+          <section className="simple-import-file-card" aria-label="Imported recipient file summary">
+            <div className="simple-import-file-heading">
+              <div><p className="eyebrow">Selected file</p><h3>{parsed.fileName}</h3><p>{bytesLabel(parsed.fileSizeBytes)}{parsed.sheetName ? ` · ${parsed.sheetName}` : ''}</p></div>
+              <span className={`badge ${uniqueReady > 0 ? 'badge-success' : 'badge-warning'}`}>{uniqueReady.toLocaleString()} ready</span>
+            </div>
+            <dl className="simple-import-stats">
+              <div><dt>Rows</dt><dd>{parsed.sourceRowCount.toLocaleString()}</dd></div>
+              <div><dt>Valid numbers</dt><dd>{preview.summary.validPhoneRows.toLocaleString()}</dd></div>
+              <div><dt>Duplicates</dt><dd>{preview.summary.duplicatePhoneRows.toLocaleString()}</dd></div>
+              <div><dt>Invalid</dt><dd>{preview.summary.invalidPhoneRows.toLocaleString()}</dd></div>
+            </dl>
+          </section>
           <div className={detection.confidence === 'low' ? 'notice warning-notice' : 'notice success-notice'}>
             <strong>Smart detection:</strong> {detection.message}
           </div>
           {parsed.sheetName ? <p className="muted-copy">Only worksheet “{parsed.sheetName}” is imported. Move the intended sheet first or export it as CSV to use another sheet.</p> : null}
-          <details><summary>Check first {Math.min(preview.rows.length, 10)} recipient rows</summary><div className="table-wrap"><table className="data-table"><thead><tr><th>Row</th><th>Name</th><th>Number</th><th>Status</th></tr></thead><tbody>{preview.rows.slice(0, 10).map((row) => <tr key={row.sourceRowNumber}><td>{row.sourceRowNumber}</td><td>{row.displayName ?? '—'}</td><td>{row.normalization.normalizedE164 ?? row.rawPhone}</td><td>{row.duplicateInFile ? 'Duplicate — excluded' : row.normalization.validationStatus}</td></tr>)}</tbody></table></div></details>
+          <details className="mobile-data-details"><summary>Preview first {Math.min(preview.rows.length, 10)} recipient rows</summary><div className="table-wrap"><table className="data-table"><thead><tr><th>Row</th><th>Name</th><th>Number</th><th>Status</th></tr></thead><tbody>{preview.rows.slice(0, 10).map((row) => <tr key={row.sourceRowNumber}><td>{row.sourceRowNumber}</td><td>{row.displayName ?? '—'}</td><td>{row.normalization.normalizedE164 ?? row.rawPhone}</td><td>{row.duplicateInFile ? 'Duplicate — excluded' : row.normalization.validationStatus}</td></tr>)}</tbody></table></div></details>
           {prepared ? <button type="button" className="secondary-button" disabled={busy || restoring} onClick={changeRecipients}>Change recipient list</button> : null}
           {parsed.truncated ? <div className="notice error-notice">This file has more than {MAX_IMPORT_ROWS.toLocaleString()} data rows. Split it before continuing.</div> : null}
 

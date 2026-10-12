@@ -240,10 +240,25 @@ function CampaignDetail({ workspaceId, campaignId }: { workspaceId: string; camp
       <section className="panel simple-send-panel">
         <div className="panel-heading"><div><p className="eyebrow">Simple send</p><h2>{dispatch ? 'Campaign progress' : 'Send to Android'}</h2></div><span className={`badge ${dispatch ? 'badge-success' : preflight?.ready ? 'badge-success' : 'badge-warning'}`}>{dispatch ? dispatch.status === 'downloaded' ? 'Downloaded' : dispatch.status === 'leasing' ? 'Leasing' : 'Queued' : preflight?.ready ? 'Ready' : 'Check required'}</span></div>
         {safetyError ? <div className="notice error-notice">{safetyError}</div> : null}
-        {dispatch ? <><p className="muted-copy">The durable cloud queue has been created for the exact confirmed SIM. Android 0.18 background gateway can execute newly authorized jobs automatically while the phone stays in the background; manual queue/send controls are recovery tools only.</p><p className="muted-copy">{dispatchSummary(dispatch)}</p></> : <><p className="muted-copy">One click re-runs current eligibility, phone/SIM freshness and exact SIM identity, then creates the authorized durable queue. It never falls back to another SIM.</p><div className="button-row"><button className="primary-button" type="button" disabled={safetyBusy || !loaded} onClick={() => void sendToPhone()}>{safetyBusy ? 'Checking & queueing…' : 'Send to Android'}</button></div></>}
-        <details className="advanced-send-details"><summary>Advanced send controls</summary><p className="muted-copy">The detailed preflight, authorization and queue panels below remain available for diagnostics and recovery.</p></details>
+        {dispatch ? <>
+          <p className="muted-copy">The durable cloud queue is frozen to the confirmed SIM. Downloaded / ACKed means Android received the job; it does not mean SENT or DELIVERED.</p>
+          <div className="campaign-progress-grid" aria-label="Campaign delivery progress">
+            <div><span>Queued</span><strong>{dispatch.queuedJobs.toLocaleString()}</strong><small>Waiting in cloud</small></div>
+            <div><span>Downloaded / ACKed</span><strong>{dispatch.downloadedJobs.toLocaleString()}</strong><small>Received by Android</small></div>
+            <div><span>Known sent</span><strong>{deliveryStatus ? (deliveryStatus.sentJobs + deliveryStatus.deliveredJobs).toLocaleString() : '—'}</strong><small>Carrier SENT success</small></div>
+            <div><span>Delivered</span><strong>{deliveryStatus ? deliveryStatus.deliveredJobs.toLocaleString() : '—'}</strong><small>Delivery callback</small></div>
+            <div><span>Failed</span><strong>{deliveryStatus ? deliveryStatus.failedJobs.toLocaleString() : '—'}</strong><small>No automatic resend</small></div>
+            <div><span>UNKNOWN</span><strong>{deliveryStatus ? deliveryStatus.unresolvedUnknownJobs.toLocaleString() : '—'}</strong><small>Never auto-retried</small></div>
+          </div>
+          <p className="muted-copy">{dispatchSummary(dispatch)}</p>
+        </> : <><p className="muted-copy">One action re-runs current eligibility, phone/SIM freshness and exact SIM identity, then creates the authorized durable queue. It never falls back to another SIM.</p><div className="button-row"><button className="primary-button" type="button" disabled={safetyBusy || !loaded} onClick={() => void sendToPhone()}>{safetyBusy ? 'Checking & queueing…' : 'Send to Android'}</button></div></>}
+        <p className="technical-details-hint">Preflight, authorization and queue diagnostics are available under Technical send details below.</p>
       </section>
 
+      <details className="panel technical-send-disclosure">
+        <summary>Technical send details</summary>
+        <p className="muted-copy technical-disclosure-copy">Use these controls for diagnostics or recovery. The main Send to Android action above remains the normal workflow.</p>
+        <div className="technical-send-panels">
       <section className="panel gateway-preflight-panel">
         <div className="panel-heading">
           <div><p className="eyebrow">Gateway preflight</p><h2>{dispatch ? 'Queue-time safety snapshot' : 'Current send-safety checks'}</h2></div>
@@ -286,6 +301,8 @@ function CampaignDetail({ workspaceId, campaignId }: { workspaceId: string; camp
           <div className="button-row"><button className="primary-button" type="button" disabled={safetyBusy || !loaded || !canCreateDurableQueue(authorization, dispatch, now)} onClick={() => void createQueue()}>{safetyBusy ? 'Working…' : 'Create durable queue'}</button></div>
         </>}
       </section>
+        </div>
+      </details>
 
       {dispatch ? <section className="panel delivery-attempts-panel">
         <div className="panel-heading">

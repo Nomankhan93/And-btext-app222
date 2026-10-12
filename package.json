@@ -1,7 +1,7 @@
 {
   "name": "bulktext-web",
   "private": true,
-  "version": "0.18.6-r2",
+  "version": "0.18.7",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -22,7 +22,9 @@
     "test:account-local": "node scripts/test-individual-account-local.mjs",
     "test:durable-queue-local": "node scripts/test-durable-queue-local.mjs",
     "test:recipient-completeness-local": "node scripts/test-recipient-completeness-local.mjs",
-    "test:delivery-contract": "node scripts/test-delivery-contract0185.mjs"
+    "test:delivery-contract": "node scripts/test-delivery-contract0185.mjs",
+    "test:mobile-ui-0187": "vitest run src/test/mobileUi0187.test.tsx src/test/campaignUx.test.tsx src/test/workspaceReliability.test.tsx src/test/gatewayLiveStatus.test.tsx src/test/campaignLiveStatus.test.tsx src/test/productNavigation.test.ts",
+    "test:mobile-ui-source-0187": "node scripts/test-mobile-ui0187-source.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.117.2",

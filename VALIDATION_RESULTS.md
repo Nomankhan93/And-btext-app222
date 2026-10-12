@@ -1,10 +1,5 @@
-# Validation — Web 0.18.6-r2
+# Validation — Web 0.18.7
 
-- TypeScript check: PASS.
-- 6 targeted/regression files, 40 tests: PASS (9 new tests).
-- Production Vite build: PASS. Existing >500 kB bundle warning remains.
-- Actual campaign page rendering test: queue progress changes from 0% to 100% without reload.
-- Database/Android source: unchanged. No hosted calls, deployment or physical SMS test performed.
-- Package installer: baseline checks, payload tamper refusal, check-only, idempotence and environment preservation verified.
+See `VALIDATION_0_18_7.md` for the complete report.
 
-The supplied ZIP omits .env.example. The patch preserves the manifest entry and does not modify that file or any real environment file.
+Source-contract, syntax, guarded-diff, whitespace, release-path and secret-value scans passed in the isolated builder. Full npm TypeScript/Vitest/Vite execution is pending in the normal WSL checkout because this builder has no npm-registry DNS and an incomplete package cache.

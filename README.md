@@ -1,3 +1,7 @@
+# Web 0.18.7 — Mobile UI/UX
+
+Mobile-first campaign workflow polish for 360px through desktop: compact application navigation, clearer Dashboard/Phone & SIM readiness, touch-safe controls, campaign import/review improvements, mobile campaign cards, and explicit Queue → Downloaded/ACKed → SENT → DELIVERED tracking. Frontend version is 0.18.7; backend contract remains 0.18.5 and no migration is included. See `PATCH_0_18_7_README.md` and `VALIDATION_0_18_7.md`.
+
 # Web 0.18.6-r2 — Campaign Live Status Consistency
 
 Queue and delivery status now refresh together. See docs/CAMPAIGN_LIVE_STATUS_0186_R2.md. Backend stays 0.18.5; no migration.
