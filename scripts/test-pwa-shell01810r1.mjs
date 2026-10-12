@@ -66,13 +66,13 @@ async function runInstall(harness) {
 {
   const harness = createHarness({ failUrl: '/assets/main.js' })
   await assert.rejects(runInstall(harness), /Required offline shell asset failed/)
-  assert.equal([...harness.stores.keys()].some((name) => name.includes('shell-0.19.3')), false, 'failed required asset must not commit a shell cache')
+  assert.equal([...harness.stores.keys()].some((name) => name.includes('shell-0.19.4')), false, 'failed required asset must not commit a shell cache')
 }
 
 {
   const harness = createHarness()
   await runInstall(harness)
-  const shellName = [...harness.stores.keys()].find((name) => name.includes('shell-0.19.3'))
+  const shellName = [...harness.stores.keys()].find((name) => name.includes('shell-0.19.4'))
   assert.ok(shellName, 'successful install must create the versioned shell cache')
   const shellStore = harness.stores.get(shellName)
   assert.ok(shellStore.has('/'), 'installed shell HTML must be cached')
@@ -89,4 +89,4 @@ async function runInstall(harness) {
   assert.match(await shellStore.get('/').clone().text(), /main\.js/, 'online navigation must not replace the immutable installed shell')
 }
 
-console.log('Web 0.19.3 service-worker shell integrity: PASS (8 assertions)')
+console.log('Web 0.19.4 service-worker shell integrity: PASS (8 assertions)')

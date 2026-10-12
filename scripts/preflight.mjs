@@ -4,7 +4,8 @@ import process from 'node:process'
 const requiredFiles = [
   'src/lib/campaignDraftStorage.ts','src/lib/useOperationGuard.ts','src/test/campaignUx.test.tsx','src/test/workspaceReliability.test.tsx',
   'src/test/offlineDraftStorage01810.test.ts','src/test/offlineDraftWorkspace01810.test.tsx','scripts/test-offline-draft01810-source.mjs',
-  'src/styles/app.css','src/test/pwaScroll0192.test.ts','scripts/test-pwa-scroll0192-source.mjs','scripts/test-release-artifact0193-source.mjs',
+  'src/styles/app.css','src/components/AppShell.tsx','src/test/pwaScroll0192.test.ts','scripts/test-pwa-scroll0192-source.mjs','scripts/test-release-artifact0193-source.mjs',
+  'src/test/mobileDialogFocus0194.test.tsx','scripts/test-mobile-dialog-focus0194-source.mjs',
   'docs/DRAFT_IMPORT_CAMPAIGN_UX_0186.md','docs/OFFLINE_DRAFT_WORKSPACE_01810.md',
   'supabase/migrations/20261010000100_delivery_recovery_contract_hardening.sql',
   'scripts/test-delivery-contract0185.mjs','src/lib/deliveryContract.ts',
@@ -59,7 +60,22 @@ if (/service[_-]?role|jwt[_-]?secret|sb_secret_/i.test(envExample)) {
   process.exit(1)
 }
 
-if (packageJson.version !== '0.19.3') { console.error(`Preflight failed. Expected package version 0.19.3, got ${packageJson.version}`); process.exit(1) }
+if (packageJson.version !== '0.19.4') { console.error(`Preflight failed. Expected package version 0.19.4, got ${packageJson.version}`); process.exit(1) }
+
+const appShell = await readFile(new URL('../src/components/AppShell.tsx', import.meta.url), 'utf8')
+const mobileDialogFocusMarkers = [
+  'toolsDialogRef',
+  'toolsTriggerRef',
+  'focusable[0]?.focus()',
+  "event.key !== 'Tab'",
+  'last.focus()',
+  'first.focus()',
+  'trigger?.isConnected',
+  'tabIndex={-1}',
+  'aria-modal="true"',
+]
+const missingMobileDialogFocusMarkers = mobileDialogFocusMarkers.filter((marker) => !appShell.includes(marker))
+if (missingMobileDialogFocusMarkers.length) { console.error(`Preflight failed. 0.19.4 mobile dialog focus markers missing: ${missingMobileDialogFocusMarkers.join(', ')}`); process.exit(1) }
 
 const migration = await readFile(new URL('../supabase/migrations/20261001000340_delivery_attempts_callbacks_recovery.sql', import.meta.url), 'utf8')
 const requiredMigrationMarkers = [
@@ -169,6 +185,6 @@ for (const marker of ["version', '') <> '0.18.5'", 'Production schema must not e
   if (!freshVerifier.includes(marker)) { console.error(`Preflight failed. Fresh-schema 0.18.4 marker missing: ${marker}`); process.exit(1) }
 }
 
-console.log('BulkText Web 0.19.3 / backend 0.18.5 preflight PASS')
+console.log('BulkText Web 0.19.4 / backend 0.18.5 preflight PASS')
 
-if (packageJson.bulktext?.backendContractVersion !== '0.18.5') { console.error('Expected backend contract 0.18.5 for Web 0.19.3'); process.exit(1) }
+if (packageJson.bulktext?.backendContractVersion !== '0.18.5') { console.error('Expected backend contract 0.18.5 for Web 0.19.4'); process.exit(1) }

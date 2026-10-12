@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthProvider'
 import { mobilePrimaryNavigation, primaryNavigation, secondaryNavigation } from '../lib/productNavigation'
@@ -6,6 +6,14 @@ import { PwaStatusRegion } from './PwaStatus'
 import { BrandLockup } from './BrandLockup'
 
 type MobileIconKind = 'home' | 'campaigns' | 'phone' | 'tools'
+
+const dialogFocusableSelector = 'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])'
+
+function getDialogFocusableElements(dialog: HTMLElement) {
+  return Array.from(dialog.querySelectorAll<HTMLElement>(dialogFocusableSelector)).filter((element) => (
+    element.getAttribute('aria-hidden') !== 'true'
+  ))
+}
 
 function MobileNavIcon({ kind }: { kind: MobileIconKind }) {
   if (kind === 'home') {
@@ -44,6 +52,8 @@ function MobileNavIcon({ kind }: { kind: MobileIconKind }) {
 
 export function AppShell() {
   const [toolsOpen, setToolsOpen] = useState(false)
+  const toolsDialogRef = useRef<HTMLElement>(null)
+  const toolsTriggerRef = useRef<HTMLButtonElement>(null)
   const { user, signOut } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
@@ -55,11 +65,53 @@ export function AppShell() {
 
   useEffect(() => {
     if (!toolsOpen) return
-    function closeOnEscape(event: KeyboardEvent) {
-      if (event.key === 'Escape') setToolsOpen(false)
+
+    const dialog = toolsDialogRef.current
+    const trigger = toolsTriggerRef.current
+    if (!dialog) return
+
+    const focusable = getDialogFocusableElements(dialog)
+    focusable[0]?.focus()
+
+    function handleDialogKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        setToolsOpen(false)
+        return
+      }
+
+      if (event.key !== 'Tab') return
+
+      const currentDialog = toolsDialogRef.current
+      if (!currentDialog) return
+
+      const currentFocusable = getDialogFocusableElements(currentDialog)
+      if (currentFocusable.length === 0) {
+        event.preventDefault()
+        return
+      }
+
+      const first = currentFocusable[0]
+      const last = currentFocusable[currentFocusable.length - 1]
+      const activeElement = document.activeElement
+
+      if (event.shiftKey && (activeElement === first || !currentDialog.contains(activeElement))) {
+        event.preventDefault()
+        last.focus()
+        return
+      }
+
+      if (!event.shiftKey && (activeElement === last || !currentDialog.contains(activeElement))) {
+        event.preventDefault()
+        first.focus()
+      }
     }
-    window.addEventListener('keydown', closeOnEscape)
-    return () => window.removeEventListener('keydown', closeOnEscape)
+
+    window.addEventListener('keydown', handleDialogKeyDown)
+    return () => {
+      window.removeEventListener('keydown', handleDialogKeyDown)
+      if (trigger?.isConnected) trigger.focus()
+    }
   }, [toolsOpen])
 
   async function logout() {
@@ -112,8 +164,9 @@ export function AppShell() {
 
       {toolsOpen ? (
         <>
-          <button className="mobile-tools-backdrop" type="button" aria-label="Dismiss tools" onClick={closeTools} />
+          <button className="mobile-tools-backdrop" type="button" tabIndex={-1} aria-label="Dismiss tools" onClick={closeTools} />
           <section
+            ref={toolsDialogRef}
             id="mobile-tools-sheet"
             className="mobile-tools-sheet"
             role="dialog"
@@ -147,6 +200,7 @@ export function AppShell() {
           </NavLink>
         ))}
         <button
+          ref={toolsTriggerRef}
           className={`mobile-nav-item mobile-tools-trigger ${toolsActive ? 'active' : ''}`}
           type="button"
           aria-label="Tools"
