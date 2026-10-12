@@ -19,7 +19,7 @@ function check(condition, message) {
   assert.ok(condition, message)
 }
 
-check(pkg.version === '0.18.10', 'frontend version must be 0.18.10 while preserving the 0.18.9 landing contract')
+check(pkg.version === '0.18.10-a1', 'frontend version must be 0.18.10-a1 while preserving the 0.18.9 landing contract')
 check(pkg.bulktext?.backendContractVersion === '0.18.5', 'backend contract must remain pinned to 0.18.5')
 check(Boolean(pkg.scripts?.['test:landing-0189']), 'targeted landing test script must exist')
 check(app.includes('PublicHomeRoute') && app.includes('<LandingPage />'), 'public root must render the landing page for signed-out visitors')

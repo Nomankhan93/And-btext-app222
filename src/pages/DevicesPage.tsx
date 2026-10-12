@@ -153,7 +153,7 @@ function DeviceWorkspace({ workspace }: { workspace: { id: string } }) {
   if (!workspace) return null
 
   return (
-    <div className="page-stack">
+    <div className="page-stack devices-page">
       <section className="page-heading">
         <div>
           <p className="eyebrow">My Android phone</p>
@@ -274,7 +274,7 @@ function DeviceWorkspace({ workspace }: { workspace: { id: string } }) {
           <div className="panel-heading"><div><p className="eyebrow">Connection history</p><h2>Recent pairing codes</h2></div></div>
           {sessions.length === 0 ? <p className="muted-copy">No pairing sessions have been generated for your account.</p> : (
             <div className="table-wrap">
-              <table className="data-table">
+              <table className="data-table device-history-table">
                 <thead><tr><th>Created</th><th>Status</th><th>Expires</th><th>Device</th></tr></thead>
                 <tbody>{sessions.map((session) => (
                   <tr key={session.pairingId}>

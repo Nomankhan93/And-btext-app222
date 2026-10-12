@@ -16,7 +16,7 @@ const pkg = JSON.parse(pkgText)
 let assertions = 0
 function check(condition, message) { assert.ok(condition, message); assertions += 1 }
 
-check(pkg.version === '0.18.10', 'frontend version must be 0.18.10')
+check(pkg.version === '0.18.10-a1', 'frontend version must be 0.18.10-a1')
 check(pkg.bulktext?.backendContractVersion === '0.18.5', 'backend contract must remain 0.18.5')
 check(pkg.scripts?.['test:offline-draft-01810']?.includes('offlineDraftStorage01810.test.ts'), 'targeted offline draft test script must exist')
 check(pkg.scripts?.['test:offline-draft-source-01810'] === 'node scripts/test-offline-draft01810-source.mjs', 'offline draft source contract script must exist')

@@ -169,6 +169,29 @@ a { color: inherit; }
   .button-row { justify-content: center; }
 }
 
+/* 0.18.10-a1 — Phone & SIM mobile containment */
+.devices-page,
+.devices-page > *,
+.devices-page .panel,
+.devices-page .metric-grid,
+.devices-page .pairing-layout,
+.devices-page .pairing-details,
+.devices-page .device-dashboard-grid,
+.devices-page .device-dashboard-card,
+.devices-page .table-wrap {
+  min-width: 0;
+  max-width: 100%;
+}
+.devices-page .table-wrap {
+  width: 100%;
+  -webkit-overflow-scrolling: touch;
+}
+.devices-page .device-history-table { min-width: 680px; }
+.devices-page .pairing-details,
+.devices-page .device-card-header > div,
+.devices-page .sim-row > div:first-child,
+.devices-page .device-card-footer > span { overflow-wrap: anywhere; }
+
 /* 0.7 device dashboard + explicit SIM binding */
 .dashboard-module-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .device-dashboard-grid { margin-top: 18px; display: grid; gap: 18px; }
@@ -766,6 +789,22 @@ details > summary {
   .technical-send-panels > .panel { padding: 15px 13px; }
   .table-wrap { max-width: 100%; overscroll-behavior-inline: contain; }
   .data-table { font-size: .85rem; }
+  .devices-page .panel-heading > .primary-button,
+  .devices-page .panel-heading > .secondary-button { width: 100%; }
+  .devices-page .pairing-layout { gap: 18px; align-items: stretch; }
+  .devices-page .pairing-qr-card { width: 100%; max-width: 280px; padding: 14px; }
+  .devices-page .pairing-qr { width: min(100%, 220px); }
+  .devices-page .pairing-details { width: 100%; }
+  .devices-page .pairing-code {
+    font-size: clamp(1.35rem, 8vw, 1.9rem);
+    letter-spacing: .08em;
+    line-height: 1.2;
+    word-break: break-word;
+  }
+  .devices-page .notice { overflow-wrap: anywhere; }
+  .devices-page .device-card-header > div,
+  .devices-page .sim-row > div:first-child { min-width: 0; width: 100%; }
+  .devices-page .device-card-footer > span { width: 100%; }
 }
 
 @media (max-width: 560px) {

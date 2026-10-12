@@ -188,7 +188,7 @@ def main() -> int:
     root = Path(args.root).resolve()
     package = json.loads((root / 'package.json').read_text(encoding='utf-8'))
     version = str(package.get('version', '')).strip()
-    if not re.fullmatch(r'\d+\.\d+\.\d+', version):
+    if not re.fullmatch(r'\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?', version):
         raise SystemExit(f'package.json contains an invalid release version: {version!r}')
 
     migrations = sorted((root / 'supabase' / 'migrations').glob('*.sql'))

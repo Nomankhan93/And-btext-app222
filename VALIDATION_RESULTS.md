@@ -1,7 +1,5 @@
-# Validation — Web 0.18.10
+# Validation — Web 0.18.10-a1
 
-See `VALIDATION_0_18_10.md` for the current certification report and WSL release command.
+See `VALIDATION_0_18_10_A1.md` for the current certification report and WSL release gates.
 
-Artifact checks completed successfully for the 0.18.10 source contract (34 assertions), preserved PWA/mobile/landing source contracts, project preflight, 96-file TypeScript/TSX syntax audit, IndexedDB persistence runtime smoke, service-worker syntax, CSS structure, 46-file protected-contract comparison, release path/secret scans and deterministic ZIP packaging.
-
-The isolated environment could not finish `npm ci`, so authoritative Vitest, TypeScript semantic checking, Vite production build and the 0.18.5 delivery SQL contract suite must be run in the normal WSL project before commit.
+Artifact source contracts passed: Phone & SIM a1 **28 assertions**, mobile navigation **23**, PWA **32**, landing/brand **32**, offline draft **34**, plus project preflight and clean release path/secret scans. Dependency installation timed out in the isolated container, so Vitest/TypeScript/Vite semantic release gates remain required in the normal WSL checkout before deploy.

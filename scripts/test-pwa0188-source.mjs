@@ -27,7 +27,7 @@ const confirmation = read('src/pages/CampaignConfirmationPage.tsx')
 const devices = read('src/pages/DevicesPage.tsx')
 const mobileNav = read('src/components/AppShell.tsx')
 
-assert(pkg.version === '0.18.10', 'frontend version must be 0.18.10 while preserving the 0.18.8 PWA contract')
+assert(pkg.version === '0.18.10-a1', 'frontend version must be 0.18.10-a1 while preserving the 0.18.8 PWA contract')
 assert(pkg.bulktext?.backendContractVersion === '0.18.5', 'backend contract must remain pinned to 0.18.5')
 assert(pkg.scripts?.['test:pwa-0188'], 'targeted PWA test script must exist')
 assert(manifest.name === 'BulkText' && manifest.short_name === 'BulkText', 'manifest app names must be BulkText')
