@@ -1,7 +1,7 @@
 {
   "name": "bulktext-web",
   "private": true,
-  "version": "0.19.1",
+  "version": "0.19.2",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -36,7 +36,9 @@
     "test:pwa-shell-01810r1": "node scripts/test-pwa-shell01810r1.mjs",
     "test:offline-reliability-01810r1": "vitest run src/test/offlineDraftStorage01810.test.ts src/test/offlineDraftWorkspace01810.test.tsx src/test/offlineWorkspaceColdStart01810r1.test.tsx src/test/campaignDraftStorage.test.ts src/test/campaignUx.test.tsx src/test/pwa0188.test.tsx src/test/workspaceReliability.test.tsx",
     "test:public-root-source-0191": "node scripts/test-public-root0191-source.mjs",
-    "test:public-root-0191": "vitest run src/test/publicRootRouting0191.test.tsx src/test/landingBrand0189.test.tsx src/test/authReliability.test.tsx src/test/productNavigation.test.ts"
+    "test:public-root-0191": "vitest run src/test/publicRootRouting0191.test.tsx src/test/landingBrand0189.test.tsx src/test/authReliability.test.tsx src/test/productNavigation.test.ts",
+    "test:pwa-scroll-source-0192": "node scripts/test-pwa-scroll0192-source.mjs",
+    "test:pwa-scroll-0192": "vitest run src/test/pwaScroll0192.test.ts src/test/pwa0188.test.tsx src/test/mobileUi0187.test.tsx"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.117.2",

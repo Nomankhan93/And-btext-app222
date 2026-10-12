@@ -474,8 +474,9 @@ a { color: inherit; }
 .danger-link:disabled { cursor: not-allowed; opacity: .5; text-decoration: none; }
 
 /* 0.18.7 — Mobile UI/UX */
-html { overflow-x: hidden; }
-body { overflow-x: hidden; }
+html { min-height: 100%; overflow-x: hidden; overflow-y: auto; }
+body { min-height: 100vh; overflow-x: hidden; overflow-y: auto; }
+#root { min-height: 100vh; }
 button, a, input, select, textarea, summary { -webkit-tap-highlight-color: transparent; }
 button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible {
   outline: 3px solid rgba(11,99,246,.28);
@@ -861,7 +862,12 @@ details > summary {
 .pwa-install-card-compact .pwa-install-actions { justify-content: flex-end; }
 
 @media (display-mode: standalone) {
-  body { overscroll-behavior-y: none; }
+  html, body {
+    overflow-y: auto;
+    overscroll-behavior-y: auto;
+  }
+
+  body, #root, .app-shell { min-height: 100dvh; }
 }
 
 @media (max-width: 700px) {

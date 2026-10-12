@@ -1,7 +1,7 @@
-# Current Patch — Web 0.19.1
+# Current Patch — Web 0.19.2
 
-**Public Landing Root Routing Fix**
+**Installed PWA Vertical Scrolling Fix**
 
-Signed-out `/` now reaches the existing public landing page instead of the protected auth guard. Signed-in `/` continues to redirect to `/dashboard`, protected-route returnTo behavior is preserved, and App-level routing regressions cover the real route tree.
+Installed/standalone PWA pages now retain normal vertical document scrolling while preserving the fixed mobile bottom navigation and the Tools sheet's internal scrolling. The old standalone-only `overscroll-behavior-y: none` restriction is removed and regression coverage guards the scroll contract.
 
-See `PATCH_0_19_1_README.md`.
+See `PATCH_0_19_2_README.md`.
