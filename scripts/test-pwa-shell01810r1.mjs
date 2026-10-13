@@ -5,6 +5,10 @@ import vm from 'node:vm'
 const source = await readFile(new URL('../public/service-worker.js', import.meta.url), 'utf8')
 const origin = 'https://bulktext.test'
 const installShell = '<!doctype html><html><head><link rel="stylesheet" href="/assets/main.css"></head><body><script type="module" src="/assets/main.js"></script></body></html>'
+const buildManifest = JSON.stringify({
+  'src/main.tsx': { file: 'assets/main.js', isEntry: true, dynamicImports: ['src/pages/CampaignsPage.tsx'] },
+  'src/pages/CampaignsPage.tsx': { file: 'assets/CampaignsPage-lazy.js', isDynamicEntry: true },
+})
 
 function createHarness({ failUrl = null } = {}) {
   const listeners = new Map()
@@ -41,6 +45,7 @@ function createHarness({ failUrl = null } = {}) {
     const path = normalize(input)
     if (path === failUrl) return new Response('missing', { status: 404 })
     if (path === '/') return new Response(installShell, { status: 200, headers: { 'content-type': 'text/html' } })
+    if (path === '/asset-manifest.json') return new Response(buildManifest, { status: 200, headers: { 'content-type': 'application/json' } })
     if (path === '/campaigns/new') return new Response('<html>network-new-build</html>', { status: 200, headers: { 'content-type': 'text/html' } })
     return new Response(`asset:${path}`, { status: 200 })
   }
@@ -66,18 +71,20 @@ async function runInstall(harness) {
 {
   const harness = createHarness({ failUrl: '/assets/main.js' })
   await assert.rejects(runInstall(harness), /Required offline shell asset failed/)
-  assert.equal([...harness.stores.keys()].some((name) => name.includes('shell-0.19.5')), false, 'failed required asset must not commit a shell cache')
+  assert.equal([...harness.stores.keys()].some((name) => name.includes('shell-0.19.6-r1')), false, 'failed required asset must not commit a shell cache')
 }
 
 {
   const harness = createHarness()
   await runInstall(harness)
-  const shellName = [...harness.stores.keys()].find((name) => name.includes('shell-0.19.5'))
+  const shellName = [...harness.stores.keys()].find((name) => name.includes('shell-0.19.6-r1'))
   assert.ok(shellName, 'successful install must create the versioned shell cache')
   const shellStore = harness.stores.get(shellName)
   assert.ok(shellStore.has('/'), 'installed shell HTML must be cached')
   assert.ok(shellStore.has('/assets/main.js'), 'referenced build JavaScript must be cached')
   assert.ok(shellStore.has('/assets/main.css'), 'referenced build CSS must be cached')
+  assert.ok(shellStore.has('/assets/CampaignsPage-lazy.js'), 'manifest-discovered lazy route JavaScript must be cached')
+  assert.ok(shellStore.has('/asset-manifest.json'), 'build asset manifest must be cached with the installed shell')
 
   let responsePromise
   harness.listeners.get('fetch')({
@@ -89,4 +96,4 @@ async function runInstall(harness) {
   assert.match(await shellStore.get('/').clone().text(), /main\.js/, 'online navigation must not replace the immutable installed shell')
 }
 
-console.log('Web 0.19.5 service-worker shell integrity: PASS (8 assertions)')
+console.log('Web 0.19.6-r1 service-worker shell integrity: PASS (10 assertions)')

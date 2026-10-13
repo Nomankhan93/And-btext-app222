@@ -1,0 +1,55 @@
+import assert from 'node:assert/strict'
+import fs from 'node:fs'
+
+const read = (path) => fs.readFileSync(path, 'utf8')
+const pkg = JSON.parse(read('package.json'))
+const lock = JSON.parse(read('package-lock.json'))
+const app = read('src/App.tsx')
+const vite = read('vite.config.ts')
+const sw = read('public/service-worker.js')
+const preflight = read('scripts/preflight.mjs')
+const buildTest = read('scripts/test-route-loading0196-build.mjs')
+const routeTest = read('src/test/routeLoading0196.test.tsx')
+
+let assertions = 0
+function check(condition, message) {
+  assertions += 1
+  assert.ok(condition, message)
+}
+
+check(pkg.version === '0.19.6-r1', 'frontend version must be 0.19.6-r1')
+check(pkg.bulktext?.backendContractVersion === '0.18.5', 'backend contract must remain 0.18.5')
+check(lock.version === '0.19.6-r1' && lock.packages?.['']?.version === '0.19.6-r1', 'package-lock release version must match package.json')
+check(Boolean(pkg.scripts?.['test:route-loading-source-0196']), 'source contract command must exist')
+check(Boolean(pkg.scripts?.['test:route-loading-0196']), 'focused route-loading Vitest command must exist')
+check(Boolean(pkg.scripts?.['test:bundle-0196']), 'post-build bundle budget command must exist')
+check(app.includes("lazy(() => import('./components/AppShell')"), 'authenticated shell must be lazy loaded')
+check(app.includes("lazy(() => import('./pages/CampaignsPage')"), 'campaign list route must be lazy loaded')
+check(app.includes("lazy(() => import('./pages/SimpleCampaignPage')"), 'campaign authoring route must be lazy loaded')
+check(app.includes("lazy(() => import('./pages/ImportsPage')"), 'recipient imports route must be lazy loaded')
+check(app.includes("lazy(() => import('./pages/DevicesPage')"), 'Phone & SIM route must be lazy loaded')
+check(app.includes("lazy(() => import('./auth/LoginPage')"), 'auth pages must be lazy loaded')
+check(!app.includes("import { CampaignsPage } from './pages/CampaignsPage'"), 'campaign routes must not remain eager imports')
+check(!app.includes("import { SimpleCampaignPage } from './pages/SimpleCampaignPage'"), 'campaign authoring must not remain an eager import')
+check(app.includes('RouteLoadBoundary'), 'lazy chunk failures must have a visible recovery boundary')
+check(app.includes('This screen could not be loaded'), 'chunk failure fallback copy must exist')
+check(app.includes('window.location.reload()'), 'chunk failure fallback must expose an explicit retry')
+check(app.includes('<Suspense fallback={<LoadingState'), 'lazy routes must expose a loading fallback')
+check(app.includes("import { LandingPage } from './pages/LandingPage'"), 'public landing must remain immediate rather than lazy')
+check(vite.includes("manifest: 'asset-manifest.json'"), 'Vite must emit a stable build asset manifest for offline lazy-chunk precaching')
+check(sw.includes("const VERSION = '0.19.6-r1'"), 'service-worker cache marker must match 0.19.6-r1')
+check(sw.includes("'/asset-manifest.json'"), 'service worker must require the Vite asset manifest')
+check(sw.includes('buildManifestAssets'), 'service worker must discover lazy build chunks from the manifest')
+check(sw.includes('cold-start offline route coverage after code splitting'), 'service-worker contract must document offline lazy-route preservation')
+check(sw.includes("url.pathname.startsWith('/assets/')"), 'static asset runtime cache boundary must remain in place')
+check(sw.includes("if (request.mode === 'navigate')"), 'navigation network-first behavior must remain in place')
+check(buildTest.includes('INITIAL_JS_BUDGET_BYTES = 500 * 1024'), 'bundle regression must enforce a 500 KiB initial-JS budget')
+check(buildTest.includes('asset-manifest.json'), 'bundle regression must inspect the Vite asset manifest')
+check(buildTest.includes('isDynamicEntry'), 'bundle regression must verify dynamic route chunks were emitted')
+check(routeTest.includes("renderRoute('/campaigns')"), 'focused runtime regression must exercise a direct protected deep link')
+check(routeTest.includes("renderRoute('/auth/login')"), 'focused runtime regression must exercise a direct auth route')
+check(routeTest.includes('This screen could not be loaded'), 'focused runtime regression must cover lazy chunk failure recovery')
+check(preflight.includes('test-route-loading0196-source.mjs'), 'preflight must require the 0.19.6-r1 source contract')
+check(!fs.existsSync('supabase/migrations/20261012001960_bundle_route_loading.sql'), '0.19.6-r1 must not add a database migration')
+
+console.log(`Web 0.19.6-r1 bundle & route loading source contract: PASS (${assertions} assertions)`)

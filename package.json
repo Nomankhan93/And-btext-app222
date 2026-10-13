@@ -1,7 +1,7 @@
 {
   "name": "bulktext-web",
   "private": true,
-  "version": "0.19.5",
+  "version": "0.19.6-r1",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -43,7 +43,12 @@
     "test:mobile-dialog-focus-source-0194": "node scripts/test-mobile-dialog-focus0194-source.mjs",
     "test:mobile-dialog-focus-0194": "vitest run src/test/mobileDialogFocus0194.test.tsx src/test/mobileUi0187.test.tsx",
     "test:error-presentation-source-0195": "node scripts/test-error-presentation0195-source.mjs",
-    "test:error-presentation-0195": "vitest run src/test/errors.test.ts"
+    "test:error-presentation-0195": "vitest run src/test/errors.test.ts",
+    "test:route-loading-source-0196": "node scripts/test-route-loading0196-source.mjs",
+    "test:route-loading-0196": "vitest run src/test/routeLoading0196.test.tsx src/test/publicRootRouting0191.test.tsx src/test/mobileUi0187.test.tsx",
+    "test:bundle-0196": "node scripts/test-route-loading0196-build.mjs",
+    "test:bootstrap-split-source-0196r1": "node scripts/test-bootstrap-split0196r1-source.mjs",
+    "test:bootstrap-split-0196r1": "vitest run src/test/routeLoading0196.test.tsx src/test/publicRootRouting0191.test.tsx src/test/pwa0188.test.tsx"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.117.2",

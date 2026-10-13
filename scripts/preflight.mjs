@@ -7,6 +7,7 @@ const requiredFiles = [
   'src/styles/app.css','src/components/AppShell.tsx','src/test/pwaScroll0192.test.ts','scripts/test-pwa-scroll0192-source.mjs','scripts/test-release-artifact0193-source.mjs',
   'src/test/mobileDialogFocus0194.test.tsx','scripts/test-mobile-dialog-focus0194-source.mjs',
   'src/test/errors.test.ts','scripts/test-error-presentation0195-source.mjs',
+  'src/test/routeLoading0196.test.tsx','scripts/test-route-loading0196-source.mjs','scripts/test-route-loading0196-build.mjs','scripts/test-bootstrap-split0196r1-source.mjs','src/AppBootstrap.tsx','vite.config.ts',
   'docs/DRAFT_IMPORT_CAMPAIGN_UX_0186.md','docs/OFFLINE_DRAFT_WORKSPACE_01810.md',
   'supabase/migrations/20261010000100_delivery_recovery_contract_hardening.sql',
   'scripts/test-delivery-contract0185.mjs','src/lib/deliveryContract.ts',
@@ -61,7 +62,7 @@ if (/service[_-]?role|jwt[_-]?secret|sb_secret_/i.test(envExample)) {
   process.exit(1)
 }
 
-if (packageJson.version !== '0.19.5') { console.error(`Preflight failed. Expected package version 0.19.5, got ${packageJson.version}`); process.exit(1) }
+if (packageJson.version !== '0.19.6-r1') { console.error(`Preflight failed. Expected package version 0.19.6-r1, got ${packageJson.version}`); process.exit(1) }
 
 const appShell = await readFile(new URL('../src/components/AppShell.tsx', import.meta.url), 'utf8')
 const mobileDialogFocusMarkers = [
@@ -76,7 +77,7 @@ const mobileDialogFocusMarkers = [
   'aria-modal="true"',
 ]
 const missingMobileDialogFocusMarkers = mobileDialogFocusMarkers.filter((marker) => !appShell.includes(marker))
-if (missingMobileDialogFocusMarkers.length) { console.error(`Preflight failed. 0.19.5 mobile dialog focus markers missing: ${missingMobileDialogFocusMarkers.join(', ')}`); process.exit(1) }
+if (missingMobileDialogFocusMarkers.length) { console.error(`Preflight failed. 0.19.6-r1 mobile dialog focus markers missing: ${missingMobileDialogFocusMarkers.join(', ')}`); process.exit(1) }
 
 
 const errorsSource = await readFile(new URL('../src/lib/errors.ts', import.meta.url), 'utf8')
@@ -92,10 +93,56 @@ const safeErrorMarkers = [
   'You do not have permission to perform this action.',
 ]
 const missingSafeErrorMarkers = safeErrorMarkers.filter((marker) => !errorsSource.includes(marker))
-if (missingSafeErrorMarkers.length) { console.error(`Preflight failed. 0.19.5 safe-error markers missing: ${missingSafeErrorMarkers.join(', ')}`); process.exit(1) }
+if (missingSafeErrorMarkers.length) { console.error(`Preflight failed. 0.19.6-r1 safe-error markers missing: ${missingSafeErrorMarkers.join(', ')}`); process.exit(1) }
 if (errorsSource.includes('parts.push(details)') || errorsSource.includes('`Hint: ${hint}`') || errorsSource.includes('`[${code}]`')) {
   console.error('Preflight failed. Raw backend details, hints or codes must not be concatenated into user-facing error text.')
   process.exit(1)
+}
+
+
+const mainSource = await readFile(new URL('../src/main.tsx', import.meta.url), 'utf8')
+const bootstrapSource = await readFile(new URL('../src/AppBootstrap.tsx', import.meta.url), 'utf8')
+const bootstrapContractSource = await readFile(new URL('../scripts/test-bootstrap-split0196r1-source.mjs', import.meta.url), 'utf8')
+const bundleGateSource = await readFile(new URL('../scripts/test-route-loading0196-build.mjs', import.meta.url), 'utf8')
+const bootstrapMarkers = [
+  "const AppBootstrap = lazy(() => import('./AppBootstrap'))",
+  '<Suspense fallback=',
+]
+if (bootstrapMarkers.some((marker) => !mainSource.includes(marker)) || mainSource.includes("from './auth/AuthProvider'") || mainSource.includes("from './workspace/WorkspaceProvider'") || mainSource.includes("import App from './App'")) {
+  console.error('Preflight failed. 0.19.6-r1 initial bootstrap split is missing or providers leaked back into the static entry.')
+  process.exit(1)
+}
+for (const marker of ["import App from './App'", "from './auth/AuthProvider'", "from './workspace/WorkspaceProvider'", '<AuthProvider>', '<WorkspaceProvider>', '<App />']) {
+  if (!bootstrapSource.includes(marker)) { console.error(`Preflight failed. 0.19.6-r1 AppBootstrap marker missing: ${marker}`); process.exit(1) }
+}
+if (
+  !bootstrapContractSource.includes('INITIAL_JS_BUDGET_BYTES = 500 * 1024') ||
+  !bundleGateSource.includes('MAX_CHUNK_BYTES = 500_000') ||
+  !bundleGateSource.includes("value?.name === 'AppBootstrap'") ||
+  !bundleGateSource.includes('appEntry[1]?.dynamicImports?.includes(key)')
+) {
+  console.error('Preflight failed. 0.19.6-r1 bootstrap/bundle correction gates are incomplete.')
+  process.exit(1)
+}
+
+const appSource = await readFile(new URL('../src/App.tsx', import.meta.url), 'utf8')
+const viteSource = await readFile(new URL('../vite.config.ts', import.meta.url), 'utf8')
+const serviceWorkerSource = await readFile(new URL('../public/service-worker.js', import.meta.url), 'utf8')
+const routeLoadingMarkers = [
+  "lazy(() => import('./components/AppShell')",
+  "lazy(() => import('./pages/CampaignsPage')",
+  "lazy(() => import('./pages/SimpleCampaignPage')",
+  "lazy(() => import('./pages/ImportsPage')",
+  "lazy(() => import('./pages/DevicesPage')",
+  'RouteLoadBoundary',
+  'This screen could not be loaded',
+  '<Suspense fallback={<LoadingState',
+]
+const missingRouteLoadingMarkers = routeLoadingMarkers.filter((marker) => !appSource.includes(marker))
+if (missingRouteLoadingMarkers.length) { console.error(`Preflight failed. 0.19.6-r1 route-loading markers missing: ${missingRouteLoadingMarkers.join(', ')}`); process.exit(1) }
+if (!viteSource.includes("manifest: 'asset-manifest.json'")) { console.error('Preflight failed. 0.19.6-r1 Vite asset manifest output is missing.'); process.exit(1) }
+for (const marker of ["const VERSION = '0.19.6-r1'", "'/asset-manifest.json'", 'buildManifestAssets', 'cold-start offline route coverage after code splitting']) {
+  if (!serviceWorkerSource.includes(marker)) { console.error(`Preflight failed. 0.19.6-r1 lazy-route offline marker missing: ${marker}`); process.exit(1) }
 }
 
 const migration = await readFile(new URL('../supabase/migrations/20261001000340_delivery_attempts_callbacks_recovery.sql', import.meta.url), 'utf8')
@@ -206,6 +253,6 @@ for (const marker of ["version', '') <> '0.18.5'", 'Production schema must not e
   if (!freshVerifier.includes(marker)) { console.error(`Preflight failed. Fresh-schema 0.18.4 marker missing: ${marker}`); process.exit(1) }
 }
 
-console.log('BulkText Web 0.19.5 / backend 0.18.5 preflight PASS')
+console.log('BulkText Web 0.19.6-r1 / backend 0.18.5 preflight PASS')
 
-if (packageJson.bulktext?.backendContractVersion !== '0.18.5') { console.error('Expected backend contract 0.18.5 for Web 0.19.5'); process.exit(1) }
+if (packageJson.bulktext?.backendContractVersion !== '0.18.5') { console.error('Expected backend contract 0.18.5 for Web 0.19.6-r1'); process.exit(1) }

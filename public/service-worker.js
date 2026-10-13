@@ -1,10 +1,10 @@
-/* BulkText Web 0.19.5 service worker.
+/* BulkText Web 0.19.6-r1 service worker.
  * Safety boundary: cache only the same-origin app shell and static assets.
  * Supabase/auth/queue/delivery/gateway requests are never cached or replayed.
  * The installed shell is immutable for this worker version so its hashed JS/CSS
  * always stays paired with the HTML that referenced it at installation time.
  */
-const VERSION = '0.19.5'
+const VERSION = '0.19.6-r1'
 const CACHE_PREFIX = 'bulktext-pwa-'
 const SHELL_CACHE = `${CACHE_PREFIX}shell-${VERSION}`
 const RUNTIME_CACHE = `${CACHE_PREFIX}runtime-${VERSION}`
@@ -23,6 +23,7 @@ const PRECACHE_URLS = [
   '/icons/icon-maskable-192.png',
   '/icons/icon-maskable-512.png',
   '/branding/bulktext-logo.png',
+  '/asset-manifest.json',
 ]
 
 async function requiredResponse(url) {
@@ -31,18 +32,32 @@ async function requiredResponse(url) {
   return response
 }
 
+function buildManifestAssets(manifest) {
+  const urls = []
+  for (const entry of Object.values(manifest)) {
+    if (typeof entry?.file === 'string') urls.push(`/${entry.file}`)
+    if (Array.isArray(entry?.css)) urls.push(...entry.css.map((path) => `/${path}`))
+    if (Array.isArray(entry?.assets)) urls.push(...entry.assets.map((path) => `/${path}`))
+  }
+  return urls
+}
+
 async function precacheAppShell() {
   const shellResponse = await requiredResponse(APP_SHELL)
   const shellHtml = await shellResponse.clone().text()
-  const buildAssets = [...shellHtml.matchAll(/(?:src|href)=["'](\/assets\/[^"']+)["']/g)].map((match) => match[1])
-  const urls = [...new Set([...PRECACHE_URLS.filter((url) => url !== APP_SHELL), ...buildAssets])]
+  const htmlAssets = [...shellHtml.matchAll(/(?:src|href)=["'](\/assets\/[^"']+)["']/g)].map((match) => match[1])
+  const manifestResponse = await requiredResponse('/asset-manifest.json')
+  const manifest = await manifestResponse.clone().json()
+  const buildAssets = buildManifestAssets(manifest)
+  const urls = [...new Set([...PRECACHE_URLS.filter((url) => ![APP_SHELL, '/asset-manifest.json'].includes(url)), ...htmlAssets, ...buildAssets])]
 
   // Fetch and validate the complete build before mutating the versioned cache.
-  // A missing JS/CSS/icon/fallback aborts installation instead of accepting a
-  // shell that cannot cold-start offline.
+  // This includes lazy route chunks from the Vite manifest so an installed PWA
+  // keeps the same cold-start offline route coverage after code splitting.
   const fetched = await Promise.all(urls.map(async (url) => [url, await requiredResponse(url)]))
   const cache = await caches.open(SHELL_CACHE)
   await cache.put(APP_SHELL, shellResponse)
+  await cache.put('/asset-manifest.json', manifestResponse)
   await Promise.all(fetched.map(([url, response]) => cache.put(url, response)))
 }
 
