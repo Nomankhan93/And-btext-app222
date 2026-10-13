@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "488396195102",
+    "project_id": "bulk-text-1b131",
+    "storage_bucket": "bulk-text-1b131.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:488396195102:android:9a23b558381b825d29f50f",
+        "android_client_info": {
+          "package_name": "com.bulktext.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAvDS8GEIafgAgTKlzvZLQpzerY-dVHMQA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
