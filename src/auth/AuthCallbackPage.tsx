@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { LoadingState } from '../components/StateViews'
-import { supabase } from '../lib/supabase'
+import { auth } from '../firebase'
 import { AuthLayout } from './AuthLayout'
 import { safeReturnTo } from './returnTo'
 
@@ -11,13 +11,12 @@ export function AuthCallbackPage() {
   const returnTo = safeReturnTo(searchParams.get('returnTo'))
 
   useEffect(() => {
-    if (!supabase) {
+    if (!auth) {
       navigate('/auth/login', { replace: true })
       return
     }
-    void supabase.auth.getSession().then(({ data }) => {
-      navigate(data.session ? returnTo : `/auth/login?returnTo=${encodeURIComponent(returnTo)}`, { replace: true })
-    })
+    const hasUser = Boolean(auth.currentUser)
+    navigate(hasUser ? returnTo : `/auth/login?returnTo=${encodeURIComponent(returnTo)}`, { replace: true })
   }, [navigate, returnTo])
 
   return (

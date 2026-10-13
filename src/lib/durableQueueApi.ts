@@ -1,11 +1,6 @@
 import type { CampaignDispatch, CampaignDispatchStatus } from './durableQueue'
 import { errorMessage } from './errors'
-import { supabase } from './supabase'
-
-function client() {
-  if (!supabase) throw new Error('Supabase is not configured.')
-  return supabase
-}
+import { callFirebaseRpc } from './firebaseRpc'
 
 function mapDispatch(row: Record<string, unknown>): CampaignDispatch {
   return {
@@ -26,7 +21,7 @@ function mapDispatch(row: Record<string, unknown>): CampaignDispatch {
 }
 
 export async function getCampaignDispatch(organizationId: string, campaignId: string): Promise<CampaignDispatch | null> {
-  const { data, error } = await client().rpc('get_campaign_dispatch', {
+  const { data, error } = await callFirebaseRpc('get_campaign_dispatch', {
     p_organization_id: organizationId,
     p_campaign_id: campaignId,
   })
@@ -36,7 +31,7 @@ export async function getCampaignDispatch(organizationId: string, campaignId: st
 }
 
 export async function enqueueCampaignDispatch(organizationId: string, campaignId: string, authorizationId: string): Promise<CampaignDispatch> {
-  const { data, error } = await client().rpc('enqueue_campaign_dispatch', {
+  const { data, error } = await callFirebaseRpc('enqueue_campaign_dispatch', {
     p_organization_id: organizationId,
     p_campaign_id: campaignId,
     p_authorization_id: authorizationId,

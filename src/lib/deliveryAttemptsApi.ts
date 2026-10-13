@@ -1,11 +1,10 @@
 import { mapContractHealth } from './deliveryContract'
 import type { CampaignDeliveryStatus, CampaignMessageAttempt, MessageRecoveryAction } from './deliveryAttempts'
 import { errorMessage } from './errors'
-import { supabase } from './supabase'
+import { callFirebaseRpc } from './firebaseRpc'
 
 function client() {
-  if (!supabase) throw new Error('Supabase is not configured.')
-  return supabase
+  return { rpc: callFirebaseRpc }
 }
 
 function nullableString(value: unknown): string | null {

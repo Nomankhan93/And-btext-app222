@@ -1,7 +1,7 @@
 import type { ImportColumnMapping, ImportPreviewRow } from './importMapping'
 import type { ParsedImportFile } from './importFiles'
 import { errorMessage } from './errors'
-import { supabase } from './supabase'
+import { callFirebaseRpc } from './firebaseRpc'
 
 export interface ContactImportSummary {
   importId: string
@@ -36,8 +36,7 @@ interface ContactImportRow {
 }
 
 function client() {
-  if (!supabase) throw new Error('Supabase is not configured.')
-  return supabase
+  return { rpc: callFirebaseRpc }
 }
 
 function mapSummary(row: ContactImportRow): ContactImportSummary {

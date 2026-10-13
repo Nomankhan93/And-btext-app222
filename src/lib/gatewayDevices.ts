@@ -1,5 +1,5 @@
 import { errorMessage } from './errors'
-import { supabase } from './supabase'
+import { callFirebaseRpc } from './firebaseRpc'
 
 export type GatewayHealthStatus = 'recent' | 'stale' | 'offline' | 'never_seen' | 'revoked'
 export type GatewayBindingStatus = 'ready' | 'missing' | 'unbound'
@@ -122,8 +122,7 @@ interface GatewaySimJson {
 }
 
 function client() {
-  if (!supabase) throw new Error('Supabase is not configured.')
-  return supabase
+  return { rpc: callFirebaseRpc }
 }
 
 function unwrap<T>(data: T | null, error: unknown, fallback: string): T {

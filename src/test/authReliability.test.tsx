@@ -5,8 +5,24 @@ import { AuthProvider, useAuth } from '../auth/AuthProvider'
 import { campaignDraftKey } from '../lib/campaignDraftStorage'
 import { writeOfflineWorkspaceLocator } from '../lib/offlineWorkspaceLocator'
 
-const mock = vi.hoisted(() => ({ getSession: vi.fn(), getUser: vi.fn(), onAuthStateChange: vi.fn() }))
-vi.mock('../lib/supabase', () => ({ supabase: { auth: mock } }))
+const mock = vi.hoisted(() => ({
+  currentUser: { uid: 'one', email: 'one@example.com', getIdToken: vi.fn(async () => 'token'), reload: vi.fn() } as any,
+  onAuthStateChange: vi.fn(),
+}))
+vi.mock('../firebase', () => ({ auth: { get currentUser() { return mock.currentUser } }, firebaseConfigured: true }))
+vi.mock('firebase/auth', () => ({
+  onAuthStateChanged: vi.fn((_auth, callback) => {
+    mock.onAuthStateChange.mockImplementation(callback)
+    callback(mock.currentUser)
+    return vi.fn()
+  }),
+  signInWithEmailAndPassword: vi.fn(),
+  createUserWithEmailAndPassword: vi.fn(),
+  signOut: vi.fn(),
+  sendPasswordResetEmail: vi.fn(),
+  updatePassword: vi.fn(),
+  updateProfile: vi.fn(),
+}))
 
 function Probe() {
   const { user, loading, revalidating } = useAuth()
@@ -14,9 +30,8 @@ function Probe() {
 }
 
 beforeEach(() => {
-  mock.getSession.mockReset()
-  mock.getUser.mockReset()
-  mock.onAuthStateChange.mockReset().mockImplementation(() => ({ data: { subscription: { unsubscribe: vi.fn() } } }))
+  mock.onAuthStateChange.mockReset()
+  mock.currentUser = { uid: 'one', email: 'one@example.com', getIdToken: vi.fn(async () => 'token'), reload: vi.fn().mockResolvedValue(undefined) }
   sessionStorage.clear()
   localStorage.clear()
 })
@@ -24,21 +39,22 @@ beforeEach(() => {
 afterEach(() => { cleanup(); sessionStorage.clear(); localStorage.clear() })
 
 it('does not resurrect an old login after a newer sign-out event', async () => {
-  let resolve!: (value: unknown) => void
-  let callback!: (event: string, session: unknown) => void
-  mock.getSession.mockImplementation(() => new Promise((done) => { resolve = done }))
-  mock.onAuthStateChange.mockImplementation((handler) => { callback = handler; return { data: { subscription: { unsubscribe: vi.fn() } } } })
   sessionStorage.setItem(campaignDraftKey('one', 'workspace'), '{}')
   render(<AuthProvider><Probe /></AuthProvider>)
-  act(() => callback('SIGNED_OUT', null))
-  await act(async () => { resolve({ data: { session: { user: { id: 'old' } } } }) })
-  expect(screen.getByText('Signed out')).toBeTruthy()
+  await act(async () => {
+    mock.currentUser = null
+    mock.onAuthStateChange(null)
+  })
+  expect(await screen.findByText('Signed out')).toBeTruthy()
   expect(sessionStorage.getItem(campaignDraftKey('one', 'workspace'))).toBeNull()
 })
 
 it('revalidates on focus, expires an invalid session and clears prior account-scoped state', async () => {
-  mock.getSession.mockResolvedValue({ data: { session: { user: { id: 'one' } } } })
-  mock.getUser.mockResolvedValue({ data: { user: null }, error: { message: 'JWT expired', status: 401 } })
+  const reloadFn = mock.currentUser.reload
+  mock.currentUser.reload.mockImplementation(async () => {
+    mock.currentUser = null
+    throw { message: 'JWT expired', code: 'auth/id-token-expired' }
+  })
   writeOfflineWorkspaceLocator('one', { workspaceId: 'workspace-one', name: 'One', slug: 'one' })
   sessionStorage.setItem(campaignDraftKey('one', 'workspace-one'), '{}')
   sessionStorage.setItem('bulktext:diagnostics:v1', JSON.stringify([{ id: 'old-diagnostic' }]))
@@ -49,7 +65,7 @@ it('revalidates on focus, expires an invalid session and clears prior account-sc
   act(() => window.dispatchEvent(new Event('focus')))
   await screen.findByText('Signed out')
 
-  expect(mock.getUser).toHaveBeenCalledTimes(1)
+  expect(reloadFn).toHaveBeenCalledTimes(1)
   expect(localStorage.length).toBe(0)
   expect(sessionStorage.getItem(campaignDraftKey('one', 'workspace-one'))).toBeNull()
   const diagnostics = JSON.parse(sessionStorage.getItem('bulktext:diagnostics:v1') ?? '[]') as Array<{ category?: string }>
@@ -58,13 +74,12 @@ it('revalidates on focus, expires an invalid session and clears prior account-sc
 })
 
 it('preserves a valid mounted session when background revalidation only hits the network', async () => {
-  mock.getSession.mockResolvedValue({ data: { session: { user: { id: 'one' } } } })
-  mock.getUser.mockResolvedValue({ data: { user: null }, error: { message: 'Failed to fetch' } })
+  mock.currentUser.reload.mockRejectedValue(new Error('Failed to fetch'))
 
   render(<AuthProvider><Probe /></AuthProvider>)
   expect(await screen.findByText('one')).toBeTruthy()
 
   act(() => window.dispatchEvent(new Event('focus')))
-  await waitFor(() => expect(mock.getUser).toHaveBeenCalledTimes(1))
+  await waitFor(() => expect(mock.currentUser.reload).toHaveBeenCalledTimes(1))
   expect(screen.getByText('one')).toBeTruthy()
 })

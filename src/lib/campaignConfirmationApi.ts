@@ -1,5 +1,5 @@
 import { errorMessage } from './errors'
-import { supabase } from './supabase'
+import { callFirebaseRpc } from './firebaseRpc'
 
 export interface ConfirmedCampaignSummary {
   campaignId: string
@@ -64,8 +64,7 @@ export interface CampaignConfirmationRecipient {
 }
 
 function client() {
-  if (!supabase) throw new Error('Supabase is not configured.')
-  return supabase
+  return { rpc: callFirebaseRpc }
 }
 
 export async function confirmCampaign(organizationId: string, draftId: string, deviceId: string): Promise<string> {

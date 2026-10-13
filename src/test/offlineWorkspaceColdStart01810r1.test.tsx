@@ -8,7 +8,10 @@ import { RequireWorkspace } from '../workspace/RequireWorkspace'
 
 const mocks = vi.hoisted(() => ({ user: { id: 'offline-user' }, rpc: vi.fn() }))
 vi.mock('../auth/AuthProvider', () => ({ useAuth: () => ({ user: mocks.user }) }))
-vi.mock('../lib/supabase', () => ({ supabase: { rpc: mocks.rpc } }))
+vi.mock('../firebase', () => ({ functions: {}, firebaseConfigured: true }))
+vi.mock('firebase/functions', () => ({
+  httpsCallable: vi.fn(() => mocks.rpc),
+}))
 vi.mock('../pwa/PwaProvider', () => ({ usePwa: () => ({ online: false }) }))
 
 function Probe() {

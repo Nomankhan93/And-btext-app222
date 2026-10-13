@@ -1,7 +1,7 @@
 import { errorMessage } from './errors'
 import type { PersonalizationSourceRow } from './messageComposer'
 import { collectPagedRows } from './pagedRpc'
-import { supabase } from './supabase'
+import { callFirebaseRpc } from './firebaseRpc'
 
 export interface MessageComposerSource {
   eligibilitySnapshotId: string
@@ -32,8 +32,7 @@ export interface MessageComposerDraft {
 }
 
 function client() {
-  if (!supabase) throw new Error('Supabase is not configured.')
-  return supabase
+  return { rpc: callFirebaseRpc }
 }
 
 export async function listMessageComposerSources(organizationId: string): Promise<MessageComposerSource[]> {
@@ -57,7 +56,9 @@ export async function getMessagePersonalizationSourceRows(organizationId: string
     const { data, error } = await client().rpc('get_message_personalization_source_rows', {
       p_organization_id: organizationId,
       p_eligibility_snapshot_id: eligibilitySnapshotId,
-    }).range(from, to)
+      p_limit: to - from + 1,
+      p_offset: from,
+    })
     if (error) throw new Error(errorMessage(error, 'Could not load eligible personalization source rows.'))
     return (data ?? []) as Record<string, unknown>[]
   })

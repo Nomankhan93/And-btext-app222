@@ -1,10 +1,32 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type PropsWithChildren } from 'react'
-import type { Session, User } from '@supabase/supabase-js'
+import {
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signOut as firebaseSignOut,
+  sendPasswordResetEmail,
+  updatePassword as firebaseUpdatePassword,
+  updateProfile,
+  onAuthStateChanged
+} from 'firebase/auth'
 import { clearCampaignDrafts } from '../lib/campaignDraftStorage'
 import { errorDiagnosticCategory, errorDiagnosticContext } from '../lib/errors'
 import { clearRecentDiagnosticEvents, reportDiagnostic } from '../lib/observability'
 import { clearOfflineWorkspaceLocators } from '../lib/offlineWorkspaceLocator'
-import { supabase } from '../lib/supabase'
+import { auth, firebaseConfigured } from '../firebase'
+
+export interface AuthUser {
+  id: string
+  email: string | null
+  displayName: string | null
+  user_metadata?: {
+    display_name?: string | null
+  }
+}
+
+export interface AuthSession {
+  user: AuthUser
+  accessToken: string
+}
 
 interface SignUpInput {
   email: string
@@ -13,8 +35,8 @@ interface SignUpInput {
 }
 
 interface AuthContextValue {
-  session: Session | null
-  user: User | null
+  session: AuthSession | null
+  user: AuthUser | null
   loading: boolean
   revalidating: boolean
   revalidateSession: () => Promise<boolean>
@@ -27,9 +49,9 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null)
 
-function requireSupabase() {
-  if (!supabase) throw new Error('Supabase is not configured. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.')
-  return supabase
+function requireAuth() {
+  if (!auth) throw new Error('Firebase Auth is not configured. Set VITE_FIREBASE_API_KEY and VITE_FIREBASE_PROJECT_ID.')
+  return auth
 }
 
 async function clearAccountScopedState() {
@@ -38,11 +60,32 @@ async function clearAccountScopedState() {
   clearRecentDiagnosticEvents()
 }
 
+function toAuthUser(user: any): AuthUser {
+  return {
+    id: user.uid,
+    email: user.email,
+    displayName: user.displayName,
+    user_metadata: {
+      display_name: user.displayName,
+    },
+  }
+}
+
+async function toAuthSession(user: any): Promise<AuthSession> {
+  const accessToken = await user.getIdToken()
+  return {
+    user: toAuthUser(user),
+    accessToken,
+  }
+}
+
 export function AuthProvider({ children }: PropsWithChildren) {
-  const [session, setSession] = useState<Session | null>(null)
+  const _osc = onAuthStateChanged
+  void _osc
+  const [session, setSession] = useState<AuthSession | null>(null)
   const [loading, setLoading] = useState(true)
   const [revalidating, setRevalidating] = useState(false)
-  const sessionRef = useRef<Session | null>(null)
+  const sessionRef = useRef<AuthSession | null>(null)
   const generation = useRef(0)
   const revalidationInFlight = useRef<Promise<boolean> | null>(null)
 
@@ -51,78 +94,94 @@ export function AuthProvider({ children }: PropsWithChildren) {
   }, [session])
 
   useEffect(() => {
-    if (!supabase) {
+    if (!firebaseConfigured || !auth) {
       setLoading(false)
       return
     }
 
     let active = true
-    let authEventReceived = false
     const request = ++generation.current
 
-    void supabase.auth.getSession().then(({ data }) => {
-      if (active && request === generation.current && !authEventReceived) {
-        sessionRef.current = data.session
-        setSession(data.session)
-        setLoading(false)
-      }
-    }).catch((reason) => {
-      if (active && request === generation.current && !authEventReceived) {
-        reportDiagnostic(reason, { source: 'handled-error', severity: 'warning' })
-        setLoading(false)
-      }
-    })
-
-    const { data: subscription } = supabase.auth.onAuthStateChange((event, nextSession) => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (!active) return
-      authEventReceived = true
       const eventGeneration = ++generation.current
       const previousUserId = sessionRef.current?.user.id ?? null
-      const nextUserId = nextSession?.user.id ?? null
+      const nextUserId = firebaseUser?.uid ?? null
       const identityChanged = Boolean(previousUserId && nextUserId && previousUserId !== nextUserId)
 
       if (identityChanged) {
         sessionRef.current = null
         setSession(null)
         setLoading(true)
-        void clearAccountScopedState().then(() => {
-          if (!active || eventGeneration !== generation.current) return
-          sessionRef.current = nextSession
-          setSession(nextSession)
-          setLoading(false)
-        })
+        await clearAccountScopedState()
+        if (!active || eventGeneration !== generation.current) return
+      }
+
+      if (!firebaseUser) {
+        await clearAccountScopedState()
+        sessionRef.current = null
+        setSession(null)
+        setLoading(false)
         return
       }
 
-      if (event === 'SIGNED_OUT' || !nextSession) void clearAccountScopedState()
-      sessionRef.current = nextSession
-      setSession(nextSession)
-      setLoading(false)
+      try {
+        const nextSession = await toAuthSession(firebaseUser)
+        sessionRef.current = nextSession
+        setSession(nextSession)
+        setLoading(false)
+      } catch (reason) {
+        reportDiagnostic(reason, { source: 'handled-error', severity: 'warning' })
+        setLoading(false)
+      }
+    }, (error) => {
+      if (active && request === generation.current) {
+        reportDiagnostic(error, { source: 'handled-error', severity: 'warning' })
+        setLoading(false)
+      }
     })
 
     return () => {
       active = false
       generation.current += 1
-      subscription.subscription.unsubscribe()
+      unsubscribe()
     }
   }, [])
 
-  const revalidateSession = useCallback((): Promise<boolean> => {
+  const revalidateSession = useCallback(async (): Promise<boolean> => {
     if (revalidationInFlight.current) return revalidationInFlight.current
     const current = sessionRef.current
-    if (!supabase || !current) return Promise.resolve(false)
+    if (!firebaseConfigured || !auth || !current || !auth.currentUser) return Promise.resolve(false)
     if (typeof navigator !== 'undefined' && navigator.onLine === false) return Promise.resolve(true)
 
     const request = ++generation.current
     setRevalidating(true)
     const task = (async () => {
       try {
-        const { data, error } = await supabase.auth.getUser()
+        await auth.currentUser.reload()
+        const firebaseUser = auth.currentUser
         if (request !== generation.current) return Boolean(sessionRef.current)
-        if (error || !data.user) {
-          const reason = error ?? new Error('Auth session missing')
+        if (!firebaseUser) {
+          await clearAccountScopedState()
+          sessionRef.current = null
+          setSession(null)
+          return false
+        }
+        const nextSession = await toAuthSession(firebaseUser)
+        const activeSession = sessionRef.current
+        if (activeSession && activeSession.user.id !== nextSession.user.id) {
+          await clearAccountScopedState()
+          sessionRef.current = null
+          setSession(null)
+          return false
+        }
+        sessionRef.current = nextSession
+        setSession(nextSession)
+        return true
+      } catch (reason: any) {
+        if (request === generation.current) {
           const category = errorDiagnosticCategory(errorDiagnosticContext(reason))
-          if (category === 'authentication' || category === 'permission') {
+          if (category === 'authentication' || category === 'permission' || String(reason?.code ?? '').includes('expired') || String(reason?.message ?? '').includes('expired') || String(reason?.code ?? '').includes('auth/')) {
             await clearAccountScopedState()
             reportDiagnostic(reason, { source: 'handled-error', category: 'authentication', severity: 'warning' })
             if (request === generation.current) {
@@ -131,23 +190,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
             }
             return false
           }
-          reportDiagnostic(reason, { source: 'handled-error', category: category === 'domain' ? 'unknown' : category, severity: 'warning' })
-          return Boolean(sessionRef.current)
+          reportDiagnostic(reason, { source: 'handled-error', severity: 'warning' })
         }
-
-        const activeSession = sessionRef.current
-        if (activeSession && activeSession.user.id !== data.user.id) {
-          await clearAccountScopedState()
-          if (request === generation.current) {
-            sessionRef.current = null
-            setSession(null)
-          }
-          reportDiagnostic(new Error('Authenticated identity changed during session validation'), { source: 'handled-error', category: 'authentication', severity: 'warning' })
-          return false
-        }
-        return true
-      } catch (reason) {
-        if (request === generation.current) reportDiagnostic(reason, { source: 'handled-error', severity: 'warning' })
         return Boolean(sessionRef.current)
       } finally {
         setRevalidating(false)
@@ -183,43 +227,36 @@ export function AuthProvider({ children }: PropsWithChildren) {
     revalidating,
     revalidateSession,
     async signIn(email, password) {
-      const client = requireSupabase()
-      const { error } = await client.auth.signInWithPassword({ email: email.trim(), password })
-      if (error) throw error
+      const clientAuth = requireAuth()
+      await signInWithEmailAndPassword(clientAuth, email.trim(), password)
     },
     async signUp({ email, password, displayName }) {
-      const client = requireSupabase()
-      const { data, error } = await client.auth.signUp({
-        email: email.trim(),
-        password,
-        options: {
-          data: { display_name: displayName.trim() },
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
-        },
-      })
-      if (error) throw error
-      return { emailConfirmationRequired: data.session === null }
+      const clientAuth = requireAuth()
+      const credential = await createUserWithEmailAndPassword(clientAuth, email.trim(), password)
+      if (displayName && credential.user) {
+        await updateProfile(credential.user, { displayName: displayName.trim() })
+      }
+      return { emailConfirmationRequired: false }
     },
     async signOut() {
-      const client = requireSupabase()
+      const clientAuth = requireAuth()
       generation.current += 1
       await clearAccountScopedState()
-      const { error } = await client.auth.signOut()
-      if (error) throw error
+      await firebaseSignOut(clientAuth)
       sessionRef.current = null
       setSession(null)
     },
     async sendPasswordReset(email) {
-      const client = requireSupabase()
-      const { error } = await client.auth.resetPasswordForEmail(email.trim(), {
-        redirectTo: `${window.location.origin}/auth/reset-password`,
+      const clientAuth = requireAuth()
+      await sendPasswordResetEmail(clientAuth, email.trim(), {
+        url: `${window.location.origin}/auth/reset-password`,
       })
-      if (error) throw error
     },
     async updatePassword(password) {
-      const client = requireSupabase()
-      const { error } = await client.auth.updateUser({ password })
-      if (error) throw error
+      const clientAuth = requireAuth()
+      const currentUser = clientAuth.currentUser
+      if (!currentUser) throw new Error('No signed in user')
+      await firebaseUpdatePassword(currentUser, password)
     },
   }), [loading, revalidateSession, revalidating, session])
 

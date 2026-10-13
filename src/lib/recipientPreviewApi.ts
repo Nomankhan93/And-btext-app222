@@ -1,7 +1,7 @@
 import { errorMessage } from './errors'
 import type { RecipientValidationRow } from './recipientPreview'
 import { collectPagedRows } from './pagedRpc'
-import { supabase } from './supabase'
+import { callFirebaseRpc } from './firebaseRpc'
 
 export interface RecipientPreviewSummary {
   previewId: string
@@ -34,8 +34,7 @@ export interface StoredRecipientPreviewRow {
 }
 
 function client() {
-  if (!supabase) throw new Error('Supabase is not configured.')
-  return supabase
+  return { rpc: callFirebaseRpc }
 }
 
 export async function listImportValidationRows(
@@ -46,7 +45,9 @@ export async function listImportValidationRows(
     const { data, error } = await client().rpc('list_contact_import_validation_rows', {
       p_organization_id: organizationId,
       p_import_id: importId,
-    }).range(from, to)
+      p_limit: to - from + 1,
+      p_offset: from,
+    })
     if (error) throw new Error(errorMessage(error, 'Could not load staged recipient rows.'))
     return (data ?? []) as Array<Record<string, unknown>>
   })
@@ -113,7 +114,9 @@ export async function getRecipientPreviewRows(
     const { data, error } = await client().rpc('get_recipient_preview_rows', {
       p_organization_id: organizationId,
       p_preview_id: previewId,
-    }).range(from, to)
+      p_limit: to - from + 1,
+      p_offset: from,
+    })
     if (error) throw new Error(errorMessage(error, 'Could not load recipient preview rows.'))
     return (data ?? []) as Array<Record<string, unknown>>
   })

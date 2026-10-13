@@ -1,10 +1,9 @@
 import { errorMessage } from './errors'
 import type { CampaignSendAuthorization, CampaignSendAuthorizationStatus, CampaignSendPreflight, CampaignSendPreflightStatus } from './gatewayPreflight'
-import { supabase } from './supabase'
+import { callFirebaseRpc } from './firebaseRpc'
 
 function client() {
-  if (!supabase) throw new Error('Supabase is not configured.')
-  return supabase
+  return { rpc: callFirebaseRpc }
 }
 
 function stringArray(value: unknown): string[] {

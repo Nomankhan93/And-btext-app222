@@ -4,7 +4,8 @@ import { ErrorState } from '../components/StateViews'
 import { PwaInstallCard } from '../components/PwaStatus'
 import { errorMessage } from '../lib/errors'
 import { clearRecentDiagnosticEvents, diagnosticSnapshot, getRecentDiagnosticEvents, subscribeDiagnosticEvents } from '../lib/observability'
-import { supabase } from '../lib/supabase'
+import { db, firebaseConfigured } from '../firebase'
+import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore'
 import { usePwa } from '../pwa/PwaProvider'
 
 export function SettingsPage() {
@@ -20,21 +21,34 @@ export function SettingsPage() {
   useEffect(() => subscribeDiagnosticEvents((events) => setDiagnosticCount(events.length)), [])
 
   useEffect(() => {
-    if (!supabase || !user || !online) return
-    void supabase.from('profiles').select('display_name').eq('id', user.id).single().then(({ data }) => {
-      if (data?.display_name) setDisplayName(data.display_name as string)
-    })
+    if (!db || !firebaseConfigured || !user || !online) return
+    void getDoc(doc(db, 'profiles', user.id)).then((snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.data()
+        if (data?.display_name) setDisplayName(data.display_name as string)
+      }
+    }).catch(() => {})
   }, [user, online])
 
   async function saveProfile(event: FormEvent) {
     event.preventDefault()
-    if (!supabase || !user || !online) return
+    if (!db || !firebaseConfigured || !user || !online) return
     setBusy(true)
     setError(null)
     setMessage(null)
-    const { error: updateError } = await supabase.from('profiles').update({ display_name: displayName.trim() || null }).eq('id', user.id)
-    if (updateError) setError(errorMessage(updateError, 'Could not update your profile.'))
-    else setMessage('Profile updated.')
+    try {
+      const profileRef = doc(db, 'profiles', user.id)
+      const snapshot = await getDoc(profileRef)
+      const payload = { display_name: displayName.trim() || null }
+      if (snapshot.exists()) {
+        await updateDoc(profileRef, payload)
+      } else {
+        await setDoc(profileRef, payload)
+      }
+      setMessage('Profile updated.')
+    } catch (updateError) {
+      setError(errorMessage(updateError, 'Could not update your profile.'))
+    }
     setBusy(false)
   }
 

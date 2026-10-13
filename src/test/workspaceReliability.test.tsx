@@ -7,14 +7,17 @@ import { WorkspaceProvider, useWorkspace } from '../workspace/WorkspaceProvider'
 import { RequireWorkspace } from '../workspace/RequireWorkspace'
 const mocks = vi.hoisted(() => ({ user: { id: 'one' }, rpc: vi.fn(), revalidateSession: vi.fn(async () => true) }))
 vi.mock('../auth/AuthProvider', () => ({ useAuth: () => ({ user: mocks.user, revalidateSession: mocks.revalidateSession }) }))
-vi.mock('../lib/supabase', () => ({ supabase: { rpc: mocks.rpc } }))
+vi.mock('../firebase', () => ({ functions: {}, firebaseConfigured: true }))
+vi.mock('firebase/functions', () => ({
+  httpsCallable: vi.fn(() => mocks.rpc),
+}))
 function Form() {
   const [value, setValue] = useState('')
   const { workspace, refresh } = useWorkspace()
   return <><span>{workspace?.name}</span><input aria-label="Draft" value={value} onChange={(e) => setValue(e.target.value)} /><button onClick={() => void refresh()}>Refresh workspace</button></>
 }
 function App() { return <WorkspaceProvider><MemoryRouter><Routes><Route element={<RequireWorkspace />}><Route path="/" element={<Form />} /></Route></Routes></MemoryRouter></WorkspaceProvider> }
-function result(id: string) { return { data: [{ workspace_id: id, name: `Workspace ${id}`, slug: id }], error: null } }
+function result(id: string) { return { data: [{ workspace_id: id, name: `Workspace ${id}`, slug: id }] } }
 beforeEach(() => { localStorage.clear(); mocks.user = { id: 'one' }; mocks.revalidateSession.mockClear(); mocks.rpc.mockReset().mockResolvedValue(result('one')) })
 afterEach(() => { cleanup(); localStorage.clear() })
 it('preserves the mounted form across same-user auth object refresh and explicit refresh failure', async () => {
@@ -52,7 +55,7 @@ it('drops verified workspace authority immediately when server permission is rev
   expect(await screen.findByText('Workspace one')).toBeTruthy()
   expect(localStorage.length).toBeGreaterThan(0)
 
-  mocks.rpc.mockResolvedValueOnce({ data: null, error: { message: 'permission denied', status: 403 } })
+  mocks.rpc.mockRejectedValueOnce(new Error('permission denied 403'))
   fireEvent.click(screen.getByText('Refresh workspace'))
 
   expect(await screen.findByText('Account setup needs attention')).toBeTruthy()

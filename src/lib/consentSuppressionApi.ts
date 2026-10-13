@@ -1,7 +1,7 @@
 import { errorMessage } from './errors'
 import type { ContactComplianceStatus, EligibilityBlockReason, EligibilityState } from './consentSuppression'
 import { collectPagedRows } from './pagedRpc'
-import { supabase } from './supabase'
+import { callFirebaseRpc } from './firebaseRpc'
 
 export type ConsentEventType = 'granted' | 'revoked'
 export type ConsentSource = 'web_form' | 'paper_form' | 'verbal' | 'import' | 'api' | 'manual' | 'other'
@@ -66,8 +66,7 @@ export interface StoredEligibilityRow {
 }
 
 function client() {
-  if (!supabase) throw new Error('Supabase is not configured.')
-  return supabase
+  return { rpc: callFirebaseRpc }
 }
 
 function mapCompliance(row: Record<string, unknown>): ContactComplianceStatus {
@@ -180,7 +179,9 @@ export async function listRecipientEligibilityRows(organizationId: string, previ
     const { data, error } = await client().rpc('list_recipient_eligibility_rows', {
       p_organization_id: organizationId,
       p_preview_id: previewId,
-    }).range(from, to)
+      p_limit: to - from + 1,
+      p_offset: from,
+    })
     if (error) throw new Error(errorMessage(error, 'Could not evaluate recipient consent and suppression.'))
     return (data ?? []) as Array<Record<string, unknown>>
   })
@@ -231,7 +232,9 @@ export async function getRecipientEligibilitySnapshotRows(organizationId: string
     const { data, error } = await client().rpc('get_recipient_eligibility_snapshot_rows', {
       p_organization_id: organizationId,
       p_snapshot_id: snapshotId,
-    }).range(from, to)
+      p_limit: to - from + 1,
+      p_offset: from,
+    })
     if (error) throw new Error(errorMessage(error, 'Could not load eligibility snapshot rows.'))
     return (data ?? []) as Array<Record<string, unknown>>
   })
