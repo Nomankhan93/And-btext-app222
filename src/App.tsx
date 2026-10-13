@@ -2,6 +2,7 @@ import { Component, Suspense, lazy, type ReactNode } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { RequireAuth } from './auth/RequireAuth'
 import { ErrorState, LoadingState } from './components/StateViews'
+import { reportDiagnostic } from './lib/observability'
 import { LandingPage } from './pages/LandingPage'
 import { useAuth } from './auth/AuthProvider'
 import { RequireWorkspace } from './workspace/RequireWorkspace'
@@ -37,6 +38,10 @@ class RouteLoadBoundary extends Component<RouteLoadBoundaryProps, RouteLoadBound
 
   static getDerivedStateFromError(): RouteLoadBoundaryState {
     return { failed: true }
+  }
+
+  componentDidCatch(error: Error) {
+    reportDiagnostic(error, { source: 'route-load', severity: 'error' })
   }
 
   render() {

@@ -43,6 +43,12 @@ describe('errorMessage', () => {
     )
   })
 
+  it('falls back for server failures even when their message looks user-readable', () => {
+    expect(errorMessage({ message: 'Unexpected database failure for workspace 123', status: 500 }, 'Could not load your workspace.')).toBe(
+      'Could not load your workspace.',
+    )
+  })
+
   it('falls back instead of surfacing internal SQL/schema failures', () => {
     expect(errorMessage({
       message: 'column "workspace_id" does not exist',

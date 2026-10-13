@@ -1,7 +1,7 @@
 {
   "name": "bulktext-web",
   "private": true,
-  "version": "0.19.6-r1",
+  "version": "0.19.7",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -48,7 +48,9 @@
     "test:route-loading-0196": "vitest run src/test/routeLoading0196.test.tsx src/test/publicRootRouting0191.test.tsx src/test/mobileUi0187.test.tsx",
     "test:bundle-0196": "node scripts/test-route-loading0196-build.mjs",
     "test:bootstrap-split-source-0196r1": "node scripts/test-bootstrap-split0196r1-source.mjs",
-    "test:bootstrap-split-0196r1": "vitest run src/test/routeLoading0196.test.tsx src/test/publicRootRouting0191.test.tsx src/test/pwa0188.test.tsx"
+    "test:bootstrap-split-0196r1": "vitest run src/test/routeLoading0196.test.tsx src/test/publicRootRouting0191.test.tsx src/test/pwa0188.test.tsx",
+    "test:observability-source-0197": "node scripts/test-observability0197-source.mjs",
+    "test:observability-0197": "vitest run src/test/observability0197.test.ts src/test/errors.test.ts src/test/routeLoading0196.test.tsx"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.117.2",

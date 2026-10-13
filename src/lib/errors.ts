@@ -1,3 +1,5 @@
+import { reportDiagnostic, type DiagnosticCategory } from './observability'
+
 interface SupabaseLikeError {
   name?: unknown
   message?: unknown
@@ -115,29 +117,33 @@ const INTERNAL_MARKERS = [
   'null value in column',
 ]
 
-function safeDisplayMessage(context: ErrorDiagnosticContext, fallback: string): string {
-  const message = context.message
+export function errorDiagnosticCategory(context: ErrorDiagnosticContext): DiagnosticCategory | 'domain' {
   const combined = [context.message, context.details, context.hint, context.code, context.status]
     .filter((value): value is string => Boolean(value))
     .join(' ')
 
-  if (includesAny(combined, NETWORK_MARKERS)) {
-    return 'Could not reach BulkText. Check your internet connection and try again.'
-  }
+  if (includesAny(combined, NETWORK_MARKERS)) return 'network'
+  if (context.status === '401' || includesAny(combined, AUTH_MARKERS)) return 'authentication'
+  if (context.status === '403' || context.code === '42501' || includesAny(combined, PERMISSION_MARKERS)) return 'permission'
+  const statusNumber = Number(context.status)
+  if ((Number.isFinite(statusNumber) && statusNumber >= 500) || includesAny(combined, INTERNAL_MARKERS)) return 'internal'
+  return context.message ? 'domain' : 'unknown'
+}
 
-  if (context.status === '401' || includesAny(combined, AUTH_MARKERS)) {
-    return 'Authentication required. Sign in again and retry.'
-  }
-
-  if (context.status === '403' || context.code === '42501' || includesAny(combined, PERMISSION_MARKERS)) {
-    return 'You do not have permission to perform this action.'
-  }
-
-  if (!message || includesAny(combined, INTERNAL_MARKERS)) return fallback
-  return message
+function safeDisplayMessage(context: ErrorDiagnosticContext, fallback: string, category: DiagnosticCategory | 'domain'): string {
+  if (category === 'network') return 'Could not reach BulkText. Check your internet connection and try again.'
+  if (category === 'authentication') return 'Authentication required. Sign in again and retry.'
+  if (category === 'permission') return 'You do not have permission to perform this action.'
+  if (category === 'internal' || category === 'unknown') return fallback
+  return context.message ?? fallback
 }
 
 export function errorMessage(reason: unknown, fallback: string): string {
   const safeFallback = nonEmptyText(fallback) ?? 'Something went wrong. Please try again.'
-  return safeDisplayMessage(errorDiagnosticContext(reason), safeFallback)
+  const context = errorDiagnosticContext(reason)
+  const category = errorDiagnosticCategory(context)
+  if (category !== 'domain') {
+    reportDiagnostic(context, { source: 'handled-error', category, severity: 'error' })
+  }
+  return safeDisplayMessage(context, safeFallback, category)
 }

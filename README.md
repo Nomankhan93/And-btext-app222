@@ -1,13 +1,11 @@
-# Web 0.19.6-r1 — Initial Bootstrap Chunk Correction
+# Web 0.19.7 — Production Observability & Error Diagnostics
 
-BulkText Web `0.19.6-r1` is a narrow corrective release on top of `0.19.6`. The original route-level lazy loading remains intact, but the application/provider bootstrap is now also loaded as a dynamic entry so `AuthProvider`, `WorkspaceProvider`, the application route tree, and their Supabase dependency graph are no longer forced into the initial static JavaScript graph.
+BulkText Web `0.19.7` adds privacy-safe production client diagnostics on top of the safe error presentation from `0.19.5` and the optimized bootstrap/route loading finalized in `0.19.6-r1`.
 
-`src/main.tsx` keeps the PWA and browser-router boundaries in the initial shell, then loads `src/AppBootstrap.tsx` through `React.lazy()` and a visible Suspense fallback. `AppBootstrap` preserves the existing `AuthProvider → WorkspaceProvider → App` nesting exactly; authorization, workspace provisioning, routing and campaign behavior are unchanged.
+Handled operational failures, top-level React failures, lazy route failures, browser errors and unhandled promise rejections are converted into sanitized diagnostic events. Events retain only categorical/support metadata such as release, environment, source, category, severity, constrained code/status/name tokens, coarse route group and online state. Raw backend messages/details/hints, phone/contact data, user email, auth tokens, full URLs, query strings and route parameters are not persisted.
 
-The post-build bundle gate still requires initial static JavaScript below 500 KiB and now additionally requires `AppBootstrap` to be a true dynamic manifest entry outside the initial graph. The largest emitted JavaScript chunk must stay below 500,000 bytes so the Vite >500 kB warning is not accepted as a successful correction.
+Only the latest 25 events are retained in the current tab's `sessionStorage`. Settings now includes a **Technical diagnostics** panel so the user can copy a sanitized support snapshot or clear it. No remote telemetry service or new backend endpoint is added.
 
-The service-worker asset-manifest precache from `0.19.6` remains in place and its cache marker is bumped to `0.19.6-r1`, so the new bootstrap chunk and all existing lazy route chunks remain available to the installed PWA offline shell.
+The existing `0.19.6-r1` route/bootstrap split and bundle budgets remain unchanged. Frontend version is `0.19.7`; backend contract remains `0.18.5`.
 
-Frontend version is `0.19.6-r1`; backend contract remains `0.18.5`. There is no Supabase migration, RLS/RPC change, Android change, SIM-selection change, campaign/send behavior change, delivery-state change, auth/workspace authorization change, offline-draft data-model change or visual redesign.
-
-See `PATCH_0_19_6_R1_README.md`, `HANDOFF_0_19_6_R1.md` and `VALIDATION_0_19_6_R1.md`.
+See `PATCH_0_19_7_README.md`, `HANDOFF_0_19_7.md`, `VALIDATION_0_19_7.md` and `docs/PRODUCTION_OBSERVABILITY_ERROR_DIAGNOSTICS_0197.md`.

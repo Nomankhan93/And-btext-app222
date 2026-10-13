@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { AuthLayout } from './AuthLayout'
 import { useAuth } from './AuthProvider'
+import { errorMessage } from '../lib/errors'
 
 export function SignupPage() {
   const { signUp } = useAuth()
@@ -20,7 +21,7 @@ export function SignupPage() {
       const result = await signUp({ email, password, displayName })
       navigate(result.emailConfirmationRequired ? `/auth/verify?email=${encodeURIComponent(email)}` : '/dashboard', { replace: true })
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Account creation failed.')
+      setError(errorMessage(reason, 'Account creation failed.'))
     } finally {
       setBusy(false)
     }

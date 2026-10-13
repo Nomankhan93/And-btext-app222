@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AuthLayout } from './AuthLayout'
 import { useAuth } from './AuthProvider'
+import { errorMessage } from '../lib/errors'
 
 export function ResetPasswordPage() {
   const { updatePassword, user } = useAuth()
@@ -18,7 +19,7 @@ export function ResetPasswordPage() {
       await updatePassword(password)
       navigate('/dashboard', { replace: true })
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Password could not be updated.')
+      setError(errorMessage(reason, 'Password could not be updated.'))
     } finally {
       setBusy(false)
     }

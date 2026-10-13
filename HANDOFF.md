@@ -1,16 +1,14 @@
-# Current Handoff — Web 0.19.6-r1
+# Current Handoff — Web 0.19.7
 
-Current frontend release: `0.19.6-r1`
+Current frontend release: `0.19.7`
 Backend contract: `0.18.5`
 
-`0.19.6-r1 — Initial Bootstrap Chunk Correction` closes the remaining bundle-budget failure from Web `0.19.6`. The first 0.19.6 build successfully split secondary routes but still emitted 532,403 bytes of initial static JavaScript, above the 512,000-byte acceptance ceiling.
+`0.19.7 — Production Observability & Error Diagnostics` adds first-party, privacy-safe client diagnostics without adding a telemetry vendor or backend endpoint.
 
-The corrective release keeps all 0.19.6 route chunks and moves the provider/application bootstrap behind a separate lazy entry. `src/main.tsx` retains `PwaProvider` and `BrowserRouter`; `src/AppBootstrap.tsx` owns the unchanged `AuthProvider → WorkspaceProvider → App` tree. This removes the auth/workspace/Supabase/application graph from the initial static dependency graph without changing authorization or routing semantics.
+BulkText now captures handled operational failures, top-level React render failures, lazy route failures, browser errors and unhandled promise rejections. The current-tab diagnostic buffer is capped at 25 sanitized events and deliberately excludes raw backend message/details/hint text, phone/contact data, user email, auth tokens, full URLs, query strings and route parameters.
 
-The bundle gate is not relaxed: initial static JavaScript must remain below 500 KiB, `AppBootstrap` must be a dynamic entry outside that graph, at least 11 dynamic entries must exist, and every emitted JavaScript chunk must be below 500,000 bytes.
+Settings includes a **Technical diagnostics** panel to copy a sanitized JSON support snapshot or clear recent events. Remaining auth/profile error presentation is routed through the shared safe error boundary.
 
-The installed-PWA asset-manifest precache remains enabled and the service-worker cache marker is `0.19.6-r1`.
+The `0.19.6-r1` bootstrap/route split, installed-PWA asset-manifest precache and bundle budgets remain unchanged. No database, RLS/RPC, Android, gateway/SIM, campaign/send, delivery-state, auth/workspace authorization, offline-draft model or PWA fetch-strategy change is included.
 
-No database, Android, gateway/SIM, campaign/send, delivery-state, auth/workspace authorization, offline-draft data-model or visual-design changes are included.
-
-See `HANDOFF_0_19_6_R1.md`.
+See `HANDOFF_0_19_7.md`.

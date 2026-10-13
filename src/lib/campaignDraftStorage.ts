@@ -1,6 +1,7 @@
 import type { ParsedImportFile } from './importFiles'
 import type { ImportColumnMapping } from './importMapping'
 import type { PersonalizationSourceRow } from './messageComposer'
+import { reportDiagnostic } from './observability'
 
 export interface PreparedCampaignRecipients {
   importId: string
@@ -262,7 +263,8 @@ async function readCampaignDraftPersistentNow(key: string): Promise<PersistentDr
     if (!record) return { status: 'unavailable', error: 'The saved device draft is invalid or uses an unsupported format.' }
     return { status: 'found', record }
   } catch (reason) {
-    return { status: 'unavailable', error: reason instanceof Error ? reason.message : 'IndexedDB could not be read.' }
+    reportDiagnostic(reason, { source: 'handled-error', category: 'internal', severity: 'error' })
+    return { status: 'unavailable', error: 'IndexedDB could not be read.' }
   } finally {
     database?.close()
   }
@@ -336,7 +338,8 @@ async function saveCampaignDraftPersistentNow(key: string, draft: CampaignLocalD
     if (result.kind === 'conflict') return { status: 'conflict', current: result.current }
     return { status: 'unavailable', error: 'The saved device draft is invalid or uses an unsupported format.' }
   } catch (reason) {
-    return { status: 'unavailable', error: reason instanceof Error ? reason.message : 'IndexedDB could not save the draft.' }
+    reportDiagnostic(reason, { source: 'handled-error', category: 'internal', severity: 'error' })
+    return { status: 'unavailable', error: 'IndexedDB could not save the draft.' }
   } finally {
     database?.close()
   }

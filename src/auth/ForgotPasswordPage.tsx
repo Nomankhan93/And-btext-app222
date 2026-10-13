@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { AuthLayout } from './AuthLayout'
 import { useAuth } from './AuthProvider'
+import { errorMessage } from '../lib/errors'
 
 export function ForgotPasswordPage() {
   const { sendPasswordReset } = useAuth()
@@ -18,7 +19,7 @@ export function ForgotPasswordPage() {
       await sendPasswordReset(email)
       setSent(true)
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Reset email could not be sent.')
+      setError(errorMessage(reason, 'Reset email could not be sent.'))
     } finally {
       setBusy(false)
     }

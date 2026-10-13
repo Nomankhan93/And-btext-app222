@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { AuthLayout } from './AuthLayout'
 import { useAuth } from './AuthProvider'
+import { errorMessage } from '../lib/errors'
 
 export function LoginPage() {
   const { signIn } = useAuth()
@@ -20,7 +21,7 @@ export function LoginPage() {
       await signIn(email, password)
       navigate(searchParams.get('returnTo') || '/dashboard', { replace: true })
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Sign in failed.')
+      setError(errorMessage(reason, 'Sign in failed.'))
     } finally {
       setBusy(false)
     }
