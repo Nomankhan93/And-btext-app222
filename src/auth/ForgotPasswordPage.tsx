@@ -27,10 +27,10 @@ export function ForgotPasswordPage() {
 
   return (
     <AuthLayout title="Reset your password" subtitle="Enter your email and we will send you a secure password recovery link." footer={<Link to="/auth/login">Back to sign in</Link>}>
-      {sent ? <div className="notice success-notice">Check your inbox for the recovery link.</div> : (
-        <form className="form-stack" onSubmit={submit}>
+      {sent ? <div className="notice success-notice" role="status">Check your inbox for the recovery link.</div> : (
+        <form className="form-stack" onSubmit={submit} aria-busy={busy}>
           <label>Email<input type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} /></label>
-          {error ? <p className="form-error">{error}</p> : null}
+          {error ? <p className="form-error" role="alert">{error}</p> : null}
           <button className="primary-button" type="submit" disabled={busy}>{busy ? 'Sending…' : 'Send recovery link'}</button>
         </form>
       )}

@@ -33,12 +33,12 @@ export function SignupPage() {
       subtitle="Create your account, pair an Android phone and send through the exact SIM you choose."
       footer={<>Already have an account? <Link to="/auth/login">Sign in</Link>.</>}
     >
-      <form className="form-stack" onSubmit={submit}>
+      <form className="form-stack" onSubmit={submit} aria-busy={busy}>
         <label>Your name<input autoComplete="name" required minLength={2} value={displayName} onChange={(e) => setDisplayName(e.target.value)} /></label>
         <label>Email<input type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} /></label>
-        <label>Password<input type="password" autoComplete="new-password" minLength={8} required value={password} onChange={(e) => setPassword(e.target.value)} /></label>
-        <p className="field-help">Use at least 8 characters for your password.</p>
-        {error ? <p className="form-error">{error}</p> : null}
+        <label>Password<input type="password" autoComplete="new-password" minLength={8} required aria-describedby="signup-password-help" value={password} onChange={(e) => setPassword(e.target.value)} /></label>
+        <p id="signup-password-help" className="field-help">Use at least 8 characters for your password.</p>
+        {error ? <p className="form-error" role="alert">{error}</p> : null}
         <button className="primary-button" type="submit" disabled={busy}>{busy ? 'Creating account…' : 'Create account'}</button>
       </form>
     </AuthLayout>

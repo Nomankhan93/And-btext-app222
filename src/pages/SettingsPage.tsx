@@ -58,16 +58,16 @@ export function SettingsPage() {
     <div className="page-stack">
       <section className="page-heading"><div><p className="eyebrow">Account</p><h1>Settings</h1><p>Manage the profile attached to your personal BulkText account.</p></div></section>
       {error ? <ErrorState title="Update failed">{error}</ErrorState> : null}
-      {message ? <div className="notice success-notice">{message}</div> : null}
+      {message ? <div className="notice success-notice" role="status">{message}</div> : null}
 
       <PwaInstallCard />
 
       <section className="panel">
         <div className="panel-heading"><div><p className="eyebrow">Profile</p><h2>Your account profile</h2></div></div>
-        <form className="form-stack narrow-form" onSubmit={saveProfile}>
-          <label>Email<input value={user?.email ?? ''} disabled aria-readonly="true" /><small>Your sign-in email is managed by your account authentication.</small></label>
+        <form className="form-stack narrow-form" onSubmit={saveProfile} aria-busy={busy}>
+          <label>Email<input type="email" value={user?.email ?? ''} disabled aria-describedby="settings-email-help" /><small id="settings-email-help">Your sign-in email is managed by your account authentication.</small></label>
           <label>Display name<input value={displayName} onChange={(e) => setDisplayName(e.target.value)} maxLength={100} /></label>
-          {!online ? <div className="notice warning-notice">Reconnect to save profile changes.</div> : null}
+          {!online ? <div className="notice warning-notice" role="status">Reconnect to save profile changes.</div> : null}
           <button className="primary-button" type="submit" disabled={busy || !online}>{busy ? 'Saving…' : 'Save profile'}</button>
         </form>
       </section>

@@ -166,8 +166,8 @@ function ImportForm() {
         </div>
       </section>
 
-      {error ? <div className="notice error-notice">{error}</div> : null}
-      {message ? <div className="notice success-notice">{message}</div> : null}
+      {error ? <div className="notice error-notice" role="alert">{error}</div> : null}
+      {message ? <div className="notice success-notice" role="status">{message}</div> : null}
 
       <section className="panel">
         <div className="panel-heading">
@@ -175,11 +175,11 @@ function ImportForm() {
           <span className="badge badge-muted">CSV · XLSX · max 5 MB / {MAX_IMPORT_ROWS.toLocaleString()} rows</span>
         </div>
         {canImport ? (
-          <div className="import-upload-zone">
+          <div className="import-upload-zone" aria-busy={busy}>
             <label className="import-file-label">
               <strong>{busy ? 'Reading file…' : 'Select CSV or XLSX'}</strong>
-              <span>Legacy .xls is intentionally rejected; save it as .xlsx or CSV first.</span>
-              <input ref={inputRef} type="file" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" disabled={busy} onChange={(event) => void selectFile(event.target.files?.[0] ?? null)} />
+              <span id="import-file-help">Legacy .xls is intentionally rejected; save it as .xlsx or CSV first.</span>
+              <input ref={inputRef} aria-describedby="import-file-help" type="file" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" disabled={busy} onChange={(event) => void selectFile(event.target.files?.[0] ?? null)} />
             </label>
           </div>
         ) : null}
@@ -194,15 +194,15 @@ function ImportForm() {
           </section>
 
           {parsed.sheetName ? <p className="notice">Only worksheet “{parsed.sheetName}” is imported. Move the intended sheet first or export it as CSV to use another sheet.</p> : null}
-          {parsed.truncated ? <div className="notice warning-notice">The file contains more than {MAX_IMPORT_ROWS.toLocaleString()} data rows. Preview is capped and staging is disabled; split the source file first.</div> : null}
+          {parsed.truncated ? <div className="notice warning-notice" role="alert">The file contains more than {MAX_IMPORT_ROWS.toLocaleString()} data rows. Preview is capped and staging is disabled; split the source file first.</div> : null}
 
           <section className="panel">
             <div className="panel-heading"><div><p className="eyebrow">Step 2</p><h2>Smart number detection</h2></div><span className={mapping.phone ? 'badge badge-success' : 'badge badge-warning'}>{mapping.phone ? 'Phone found' : 'Phone needs mapping'}</span></div>
-            {detection ? <div className={detection.confidence === 'low' ? 'notice warning-notice' : 'notice success-notice'}><strong>Smart detection:</strong> {detection.message}</div> : null}
+            {detection ? <div className={detection.confidence === 'low' ? 'notice warning-notice' : 'notice success-notice'} role="status"><strong>Smart detection:</strong> {detection.message}</div> : null}
             <details className="advanced-mapping" open={!mapping.phone || detection?.confidence === 'low'}>
               <summary>Advanced column mapping</summary>
             <div className="import-mapping-grid">
-              <label><span>Phone number *</span><select disabled={busy} value={mapping.phone} onChange={(event) => setMapping((current) => ({ ...current, phone: event.target.value }))}><option value="">Select column…</option>{parsed.headers.map((header) => <option key={header} value={header}>{header}</option>)}</select></label>
+              <label><span>Phone number *</span><select aria-required="true" disabled={busy} value={mapping.phone} onChange={(event) => setMapping((current) => ({ ...current, phone: event.target.value }))}><option value="">Select column…</option>{parsed.headers.map((header) => <option key={header} value={header}>{header}</option>)}</select></label>
               <label><span>Full / display name</span><select disabled={busy} value={mapping.displayName ?? ''} onChange={(event) => setMapping((current) => ({ ...current, displayName: optionalHeader(event.target.value) }))}><option value="">Not mapped</option>{parsed.headers.map((header) => <option key={header} value={header}>{header}</option>)}</select></label>
               <label><span>First name</span><select disabled={busy} value={mapping.firstName ?? ''} onChange={(event) => setMapping((current) => ({ ...current, firstName: optionalHeader(event.target.value) }))}><option value="">Not mapped</option>{parsed.headers.map((header) => <option key={header} value={header}>{header}</option>)}</select></label>
               <label><span>Last name</span><select disabled={busy} value={mapping.lastName ?? ''} onChange={(event) => setMapping((current) => ({ ...current, lastName: optionalHeader(event.target.value) }))}><option value="">Not mapped</option>{parsed.headers.map((header) => <option key={header} value={header}>{header}</option>)}</select></label>

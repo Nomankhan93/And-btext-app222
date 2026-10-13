@@ -27,10 +27,11 @@ export function ResetPasswordPage() {
 
   return (
     <AuthLayout title="Choose a new password" subtitle="Choose a new password after opening the secure recovery link from your email.">
-      {!user ? <div className="notice warning-notice">Waiting for a valid recovery session. Re-open the link from your reset email if needed.</div> : (
-        <form className="form-stack" onSubmit={submit}>
-          <label>New password<input type="password" autoComplete="new-password" minLength={8} required value={password} onChange={(e) => setPassword(e.target.value)} /></label>
-          {error ? <p className="form-error">{error}</p> : null}
+      {!user ? <div className="notice warning-notice" role="status">Waiting for a valid recovery session. Re-open the link from your reset email if needed.</div> : (
+        <form className="form-stack" onSubmit={submit} aria-busy={busy}>
+          <label>New password<input type="password" autoComplete="new-password" minLength={8} required aria-describedby="reset-password-help" value={password} onChange={(e) => setPassword(e.target.value)} /></label>
+          <p id="reset-password-help" className="field-help">Use at least 8 characters for your new password.</p>
+          {error ? <p className="form-error" role="alert">{error}</p> : null}
           <button className="primary-button" type="submit" disabled={busy}>{busy ? 'Updating…' : 'Update password'}</button>
         </form>
       )}

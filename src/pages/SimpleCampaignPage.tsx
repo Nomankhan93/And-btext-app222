@@ -508,8 +508,8 @@ function CampaignForm({ storageKey }: { storageKey: string }) {
       {reconciledTime ? <p className="muted-copy draft-reconciled-copy">Prepared recipient details last refreshed from the server at {reconciledTime}. Local message edits are not sent to the server until you choose Review campaign.</p> : null}
       {restoreFailed && prepared && online ? <button className="secondary-button" type="button" disabled={restoring} onClick={() => { setError(null); setRestoreAttempt((value) => value + 1) }}>Retry prepared recipients</button> : null}
       {restoring ? <div role="status" className="notice">Refreshing prepared recipients from the server…</div> : null}
-      {error ? <div className="notice error-notice">{error}</div> : null}
-      {notice ? <div className="notice success-notice">{notice}</div> : null}
+      {error ? <div className="notice error-notice" role="alert">{error}</div> : null}
+      {notice ? <div className="notice success-notice" role="status">{notice}</div> : null}
 
       <ol className="simple-stepper" aria-label="Campaign progress">
         <li className={currentStep === 1 ? 'active' : currentStep > 1 ? 'completed' : ''} aria-current={currentStep === 1 ? 'step' : undefined}><span>1</span><strong>Campaign</strong></li>
@@ -520,16 +520,16 @@ function CampaignForm({ storageKey }: { storageKey: string }) {
 
       <section className="panel simple-campaign-section">
         <div className="panel-heading"><div><p className="eyebrow">Step 1</p><h2>Campaign name</h2></div></div>
-        <label className="field simple-campaign-name-field"><span>Name</span><input disabled={busy || restoring} value={campaignName} maxLength={120} onChange={(event) => setCampaignName(event.target.value)} placeholder="October customer update" /></label>
+        <label className="field simple-campaign-name-field"><span>Name</span><input aria-required="true" disabled={busy || restoring} value={campaignName} maxLength={120} onChange={(event) => setCampaignName(event.target.value)} placeholder="October customer update" /></label>
       </section>
 
       <section className="panel simple-campaign-section">
         <div className="panel-heading"><div><p className="eyebrow">Step 2</p><h2>Upload recipient list</h2><p className="muted-copy">We primarily need the mobile-number column. Names and other fields are optional.</p></div><span className="badge badge-muted">CSV · XLSX · max 5 MB / {MAX_IMPORT_ROWS.toLocaleString()} rows</span></div>
-        <div className="import-upload-zone">
+        <div className="import-upload-zone" aria-busy={busy && !parsed}>
           <label className="import-file-label">
             <strong>{busy && !parsed ? 'Reading file…' : 'Choose CSV or XLSX'}</strong>
-            <span>BulkText looks at both the column name and the actual values to find Pakistan mobile numbers.</span>
-            <input ref={fileRef} type="file" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" disabled={busy || restoring || Boolean(prepared)} onChange={(event) => void selectFile(event.target.files?.[0] ?? null)} />
+            <span id="simple-import-file-help">BulkText looks at both the column name and the actual values to find Pakistan mobile numbers.</span>
+            <input ref={fileRef} aria-describedby="simple-import-file-help" type="file" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" disabled={busy || restoring || Boolean(prepared)} onChange={(event) => void selectFile(event.target.files?.[0] ?? null)} />
           </label>
         </div>
 
@@ -546,18 +546,18 @@ function CampaignForm({ storageKey }: { storageKey: string }) {
               <div><dt>Invalid</dt><dd>{preview.summary.invalidPhoneRows.toLocaleString()}</dd></div>
             </dl>
           </section>
-          <div className={detection.confidence === 'low' ? 'notice warning-notice' : 'notice success-notice'}>
+          <div className={detection.confidence === 'low' ? 'notice warning-notice' : 'notice success-notice'} role="status">
             <strong>Smart detection:</strong> {detection.message}
           </div>
           {parsed.sheetName ? <p className="muted-copy">Only worksheet “{parsed.sheetName}” is imported. Move the intended sheet first or export it as CSV to use another sheet.</p> : null}
           <details className="mobile-data-details"><summary>Preview first {Math.min(preview.rows.length, 10)} recipient rows</summary><div className="table-wrap"><table className="data-table"><thead><tr><th>Row</th><th>Name</th><th>Number</th><th>Status</th></tr></thead><tbody>{preview.rows.slice(0, 10).map((row) => <tr key={row.sourceRowNumber}><td>{row.sourceRowNumber}</td><td>{row.displayName ?? '—'}</td><td>{row.normalization.normalizedE164 ?? row.rawPhone}</td><td>{row.duplicateInFile ? 'Duplicate — excluded' : row.normalization.validationStatus}</td></tr>)}</tbody></table></div></details>
           {prepared ? <button type="button" className="secondary-button" disabled={busy || restoring} onClick={changeRecipients}>Change recipient list</button> : null}
-          {parsed.truncated ? <div className="notice error-notice">This file has more than {MAX_IMPORT_ROWS.toLocaleString()} data rows. Split it before continuing.</div> : null}
+          {parsed.truncated ? <div className="notice error-notice" role="alert">This file has more than {MAX_IMPORT_ROWS.toLocaleString()} data rows. Split it before continuing.</div> : null}
 
           <details className="advanced-mapping" open={!mapping.phone || detection.confidence === 'low'}>
             <summary>Advanced column mapping</summary>
             <div className="import-mapping-grid">
-              <label><span>Phone number *</span><select value={mapping.phone} disabled={busy || restoring || Boolean(prepared)} onChange={(event) => { setConsentConfirmed(false); setMapping((current) => ({ ...current, phone: event.target.value })) }}><option value="">Select column…</option>{parsed.headers.map((header) => <option key={header} value={header}>{header}</option>)}</select></label>
+              <label><span>Phone number *</span><select aria-required="true" value={mapping.phone} disabled={busy || restoring || Boolean(prepared)} onChange={(event) => { setConsentConfirmed(false); setMapping((current) => ({ ...current, phone: event.target.value })) }}><option value="">Select column…</option>{parsed.headers.map((header) => <option key={header} value={header}>{header}</option>)}</select></label>
               <label><span>Full / display name</span><select value={mapping.displayName ?? ''} disabled={busy || restoring || Boolean(prepared)} onChange={(event) => setMapping((current) => ({ ...current, displayName: optionalHeader(event.target.value) }))}><option value="">Not mapped</option>{parsed.headers.map((header) => <option key={header} value={header}>{header}</option>)}</select></label>
               <label><span>First name</span><select value={mapping.firstName ?? ''} disabled={busy || restoring || Boolean(prepared)} onChange={(event) => setMapping((current) => ({ ...current, firstName: optionalHeader(event.target.value) }))}><option value="">Not mapped</option>{parsed.headers.map((header) => <option key={header} value={header}>{header}</option>)}</select></label>
               <label><span>Last name</span><select value={mapping.lastName ?? ''} disabled={busy || restoring || Boolean(prepared)} onChange={(event) => setMapping((current) => ({ ...current, lastName: optionalHeader(event.target.value) }))}><option value="">Not mapped</option>{parsed.headers.map((header) => <option key={header} value={header}>{header}</option>)}</select></label>
@@ -576,16 +576,16 @@ function CampaignForm({ storageKey }: { storageKey: string }) {
 
       {prepared ? <section className="panel simple-campaign-section">
         <div className="panel-heading"><div><p className="eyebrow">Step 3</p><h2>Write message</h2></div><span className="badge badge-success">{prepared.eligibleRows.toLocaleString()} ready</span></div>
-        {prepared.suppressedRows > 0 ? <div className="notice warning-notice">{prepared.suppressedRows.toLocaleString()} recipient{prepared.suppressedRows === 1 ? ' is' : 's are'} on the do-not-send list and will not receive this campaign.</div> : null}
-        <label className="field simple-message-field"><span>SMS message</span><textarea rows={8} maxLength={4000} disabled={busy || restoring} value={messageTemplate} onChange={(event) => setMessageTemplate(event.target.value)} placeholder="Type your message…" /><small>Personalization is optional. Use <code>{'{{name}}'}</code> only when the uploaded file contains names.</small></label>
-        {templateAnalysis.malformed ? <div className="notice error-notice">Message contains malformed <code>{'{{…}}'}</code> braces.</div> : null}
-        {templateAnalysis.unsupportedTokens.length ? <div className="notice error-notice">Unsupported variables: {templateAnalysis.unsupportedTokens.join(', ')}</div> : null}
+        {prepared.suppressedRows > 0 ? <div className="notice warning-notice" role="status">{prepared.suppressedRows.toLocaleString()} recipient{prepared.suppressedRows === 1 ? ' is' : 's are'} on the do-not-send list and will not receive this campaign.</div> : null}
+        <label className="field simple-message-field"><span>SMS message</span><textarea rows={8} maxLength={4000} disabled={busy || restoring} value={messageTemplate} aria-required="true" aria-invalid={(templateAnalysis.malformed || templateAnalysis.unsupportedTokens.length > 0) || undefined} aria-describedby={['simple-message-help', templateAnalysis.malformed ? 'simple-message-malformed' : null, templateAnalysis.unsupportedTokens.length ? 'simple-message-unsupported' : null].filter(Boolean).join(' ')} onChange={(event) => setMessageTemplate(event.target.value)} placeholder="Type your message…" /><small id="simple-message-help">Personalization is optional. Use <code>{'{{name}}'}</code> only when the uploaded file contains names.</small></label>
+        {templateAnalysis.malformed ? <div id="simple-message-malformed" className="notice error-notice" role="alert">Message contains malformed <code>{'{{…}}'}</code> braces.</div> : null}
+        {templateAnalysis.unsupportedTokens.length ? <div id="simple-message-unsupported" className="notice error-notice" role="alert">Unsupported variables: {templateAnalysis.unsupportedTokens.join(', ')}</div> : null}
         <div className="metric-grid simple-message-metrics">
           <article className="metric-card"><span>Recipients</span><h2>{usage.readyRecipients.toLocaleString()}</h2><p>Complete personalized messages.</p></article>
           <article className="metric-card"><span>Estimated SMS units</span><h2>{usage.estimatedSmsUnits.toLocaleString()}</h2><p>{usage.encodingSummary}</p></article>
           <article className="metric-card"><span>Segments</span><h2>{usage.maximumSegments || 0}</h2><p>Maximum per recipient in the current message.</p></article>
         </div>
-        {usage.blockedRecipients > 0 ? <div className="notice warning-notice">{usage.blockedRecipients.toLocaleString()} recipient{usage.blockedRecipients === 1 ? '' : 's'} cannot render the selected personalization variables. Remove the variable or provide that data.</div> : null}
+        {usage.blockedRecipients > 0 ? <div className="notice warning-notice" role="status">{usage.blockedRecipients.toLocaleString()} recipient{usage.blockedRecipients === 1 ? '' : 's'} cannot render the selected personalization variables. Remove the variable or provide that data.</div> : null}
         <div className="button-row"><button className="primary-button" type="button" disabled={busy || !canReview} onClick={() => void reviewCampaign()}>{busy ? 'Saving…' : 'Review campaign'}</button></div>
       </section> : null}
 

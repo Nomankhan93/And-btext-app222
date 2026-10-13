@@ -262,8 +262,8 @@ function ComposerForm() {
         {canEdit ? <button className="secondary-button compact-button" type="button" disabled={busy || sources.length === 0} onClick={newDraft}>New draft</button> : null}
       </section>
 
-      {error ? <div className="notice error-notice">{error}</div> : null}
-      {message ? <div className="notice success-notice">{message}</div> : null}
+      {error ? <div className="notice error-notice" role="alert">{error}</div> : null}
+      {message ? <div className="notice success-notice" role="status">{message}</div> : null}
 
       {sources.length === 0 ? (
         <EmptyState title="No recipients ready yet">Use <Link to="/campaigns/new">New campaign</Link> for the simple upload → message flow, or prepare recipients through the advanced tools.</EmptyState>
@@ -272,7 +272,7 @@ function ComposerForm() {
           <section className="panel">
             <div className="panel-heading"><div><p className="eyebrow">Recipients</p><h2>Ready recipient list</h2></div></div>
             <div className="form-grid composer-source-grid">
-              <label className="field"><span>Recipient list</span><select disabled={busy} value={selectedSnapshotId} onChange={(event) => chooseSnapshot(event.target.value)}>{sources.map((source) => <option key={source.eligibilitySnapshotId} value={source.eligibilitySnapshotId}>{source.sourceFilename} · {source.eligibleRows} ready</option>)}</select></label>
+              <label className="field"><span>Recipient list</span><select aria-required="true" disabled={busy} value={selectedSnapshotId} onChange={(event) => chooseSnapshot(event.target.value)}>{sources.map((source) => <option key={source.eligibilitySnapshotId} value={source.eligibilitySnapshotId}>{source.sourceFilename} · {source.eligibleRows} ready</option>)}</select></label>
               <div className="definition-card"><span>Source</span><strong>{selectedSource?.sourceFilename ?? '—'}</strong><small>Prepared recipient source</small></div>
               <div className="definition-card"><span>Recipients</span><strong>{selectedSource?.eligibleRows ?? 0}</strong><small>Only recipients that passed the current checks are included.</small></div>
               <div className="definition-card"><span>Prepared</span><strong>{selectedSource ? dateTime(selectedSource.snapshotCreatedAt) : '—'}</strong><small>Recipient list ready for drafting</small></div>
@@ -282,8 +282,8 @@ function ComposerForm() {
           <section className="composer-grid">
             <div className="panel composer-editor-panel">
               <div className="panel-heading"><div><p className="eyebrow">Draft editor</p><h2>{draftId ? 'Edit message draft' : 'New message draft'}</h2></div>{draftId ? <span className="badge badge-success">Saved draft</span> : <span className="badge badge-muted">Unsaved</span>}</div>
-              <label className="field"><span>Draft title</span><input maxLength={120} value={title} disabled={!canEdit || busy} onChange={(event) => setTitle(event.target.value)} placeholder="October service reminder" /></label>
-              <label className="field"><span>Message</span><textarea ref={textareaRef} rows={9} maxLength={MESSAGE_TEMPLATE_MAX_CHARACTERS} value={messageTemplate} disabled={!canEdit || busy} onChange={(event) => setMessageTemplate(event.target.value)} placeholder="Hello {{name}}, your appointment is…" /><small>{messageTemplate.length} / {MESSAGE_TEMPLATE_MAX_CHARACTERS} template characters. Encoding and estimated SMS units update live below for every complete personalized recipient.</small></label>
+              <label className="field"><span>Draft title</span><input aria-required="true" maxLength={120} value={title} disabled={!canEdit || busy} onChange={(event) => setTitle(event.target.value)} placeholder="October service reminder" /></label>
+              <label className="field"><span>Message</span><textarea ref={textareaRef} rows={9} maxLength={MESSAGE_TEMPLATE_MAX_CHARACTERS} value={messageTemplate} disabled={!canEdit || busy} aria-required="true" aria-invalid={hasTemplateProblem || undefined} aria-describedby={['composer-message-help', analysis.malformed ? 'composer-message-malformed' : null, analysis.unsupportedTokens.length ? 'composer-message-unsupported' : null].filter(Boolean).join(' ')} onChange={(event) => setMessageTemplate(event.target.value)} placeholder="Hello {{name}}, your appointment is…" /><small id="composer-message-help">{messageTemplate.length} / {MESSAGE_TEMPLATE_MAX_CHARACTERS} template characters. Encoding and estimated SMS units update live below for every complete personalized recipient.</small></label>
 
               <div className="composer-token-section">
                 <span className="field-label">Built-in variables</span>
@@ -294,10 +294,10 @@ function ComposerForm() {
                 {customKeys.length ? <div className="token-list">{customKeys.map((key) => <button key={key} type="button" className="token-button" disabled={!canEdit || busy} onClick={() => insertToken(`custom:${key}`)}>{`{{custom:${key}}}`}</button>)}</div> : <p className="muted-copy">This recipient list has no custom import fields.</p>}
               </div>
 
-              {analysis.malformed ? <div className="notice error-notice">Message contains unmatched or malformed <code>{'{{…}}'}</code> braces.</div> : null}
-              {analysis.unsupportedTokens.length ? <div className="notice error-notice">Unsupported tokens: {analysis.unsupportedTokens.join(', ')}</div> : null}
-              {unavailableCustomTokens.length ? <div className="notice warning-notice">These custom fields do not exist in the selected recipient snapshot: {unavailableCustomTokens.join(', ')}</div> : null}
-              {hasRecipientProblem && !hasTemplateProblem ? <div className="notice warning-notice">{personalizationSummary.recipientsWithMissingValues} recipient(s) are missing at least one value used by this template. The preview below shows each missing token explicitly.</div> : null}
+              {analysis.malformed ? <div id="composer-message-malformed" className="notice error-notice" role="alert">Message contains unmatched or malformed <code>{'{{…}}'}</code> braces.</div> : null}
+              {analysis.unsupportedTokens.length ? <div id="composer-message-unsupported" className="notice error-notice" role="alert">Unsupported tokens: {analysis.unsupportedTokens.join(', ')}</div> : null}
+              {unavailableCustomTokens.length ? <div className="notice warning-notice" role="status">These custom fields do not exist in the selected recipient snapshot: {unavailableCustomTokens.join(', ')}</div> : null}
+              {hasRecipientProblem && !hasTemplateProblem ? <div className="notice warning-notice" role="status">{personalizationSummary.recipientsWithMissingValues} recipient(s) are missing at least one value used by this template. The preview below shows each missing token explicitly.</div> : null}
 
               {draftId && !isSaved ? <p role="status" className="notice warning-notice">Unsaved changes. Update this draft before reviewing the campaign.</p> : null}
               {canEdit ? <div className="recipient-actions"><button className="primary-button" type="button" disabled={busy || !selectedSnapshotId || !title.trim() || !messageTemplate.trim() || hasTemplateProblem} onClick={() => void saveDraft()}>{busy ? 'Saving…' : draftId ? 'Update draft' : 'Save draft'}</button>{draftId && isSaved && !busy && !sourceLoading && !hasTemplateProblem && !hasRecipientProblem && smsUsage.readyRecipients > 0 ? <Link className="secondary-button" to={`/campaigns/review/${draftId}`}>Review &amp; confirm</Link> : null}</div> : null}

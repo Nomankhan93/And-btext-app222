@@ -1,7 +1,7 @@
-# Current Patch — Web 0.19.8
+# Current Patch — Web 0.19.9
 
-**Auth, Session & Workspace Boundary Hardening**
+**Accessibility & Form Interaction Audit**
 
-Hardens mounted-session revalidation, account-switch/sign-out cleanup, protected return targets, stale workspace responses and workspace authorization loss without changing backend/database contracts.
+Hardens accessibility semantics across auth, profile settings, phone checking, recipient import, message composition and simple campaign authoring without changing workflow or backend/database contracts.
 
-See `PATCH_0_19_8_README.md`.
+See `PATCH_0_19_9_README.md`.

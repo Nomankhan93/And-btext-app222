@@ -1,7 +1,7 @@
 {
   "name": "bulktext-web",
   "private": true,
-  "version": "0.19.8",
+  "version": "0.19.9",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -52,7 +52,9 @@
     "test:observability-source-0197": "node scripts/test-observability0197-source.mjs",
     "test:observability-0197": "vitest run src/test/observability0197.test.ts src/test/errors.test.ts src/test/routeLoading0196.test.tsx",
     "test:auth-boundary-source-0198": "node scripts/test-auth-session-workspace0198-source.mjs",
-    "test:auth-boundary-0198": "vitest run src/test/authBoundary0198.test.ts src/test/authReliability.test.tsx src/test/workspaceReliability.test.tsx src/test/publicRootRouting0191.test.tsx"
+    "test:auth-boundary-0198": "vitest run src/test/authBoundary0198.test.ts src/test/authReliability.test.tsx src/test/workspaceReliability.test.tsx src/test/publicRootRouting0191.test.tsx",
+    "test:accessibility-forms-source-0199": "node scripts/test-accessibility-forms0199-source.mjs",
+    "test:accessibility-forms-0199": "vitest run src/test/accessibilityForms0199.test.tsx src/test/publicRootRouting0191.test.tsx src/test/mobileDialogFocus0194.test.tsx src/test/campaignUx.test.tsx"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.117.2",

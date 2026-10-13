@@ -34,10 +34,10 @@ export function LoginPage() {
       subtitle="Sign in to your BulkText workspace."
       footer={<>New to BulkText? <Link to="/auth/signup">Create an account</Link>.</>}
     >
-      <form className="form-stack" onSubmit={submit}>
+      <form className="form-stack" onSubmit={submit} aria-busy={busy} aria-describedby={error ? 'login-form-error' : undefined}>
         <label>Email<input type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} /></label>
         <label>Password<input type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} /></label>
-        {error ? <p className="form-error">{error}</p> : null}
+        {error ? <p id="login-form-error" className="form-error" role="alert">{error}</p> : null}
         <button className="primary-button" type="submit" disabled={busy}>{busy ? 'Signing in…' : 'Sign in'}</button>
         <Link className="text-link" to="/auth/forgot-password">Forgot password?</Link>
       </form>

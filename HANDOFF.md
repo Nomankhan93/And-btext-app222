@@ -1,10 +1,10 @@
-# Current Handoff — Web 0.19.8
+# Current Handoff — Web 0.19.9
 
-Current frontend release: `0.19.8`
+Current frontend release: `0.19.9`
 Backend contract: `0.18.5`
 
-`0.19.8 — Auth, Session & Workspace Boundary Hardening` adds reconnect/focus session verification, safe post-login return targets, stale-response protection and immediate workspace-authority removal on auth/permission loss.
+`0.19.9 — Accessibility & Form Interaction Audit` adds programmatic busy/error/status semantics, helper associations, required/invalid state exposure and accessible result naming across high-use auth and campaign forms.
 
 No database migration is included.
 
-See `HANDOFF_0_19_8.md`.
+See `HANDOFF_0_19_9.md`.

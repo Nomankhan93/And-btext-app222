@@ -33,14 +33,14 @@ export function PhoneNumbersPage() {
       <section className="panel">
         <div className="panel-heading">
           <div><p className="eyebrow">Try numbers</p><h2>Paste one number per line</h2></div>
-          <span className={invalid ? 'badge badge-warning' : 'badge badge-success'}>{invalid ? `${invalid} needs review` : 'All valid'}</span>
+          <span className={invalid ? 'badge badge-warning' : 'badge badge-success'} role="status" aria-live="polite" aria-atomic="true">{invalid ? `${invalid} needs review` : 'All valid'}</span>
         </div>
         <div className="phone-lab-grid">
           <label className="phone-input-label">
             <span>Raw phone numbers</span>
-            <textarea value={input} onChange={(event) => setInput(event.target.value)} rows={12} spellCheck={false} placeholder="03001234567" />
+            <textarea value={input} onChange={(event) => setInput(event.target.value)} rows={12} spellCheck={false} placeholder="03001234567" aria-describedby="phone-number-rules" />
           </label>
-          <div className="phone-rules-card">
+          <div className="phone-rules-card" id="phone-number-rules">
             <strong>Supported numbers</strong>
             <ul>
               <li>Current country scope: Pakistan (PK).</li>
@@ -58,6 +58,7 @@ export function PhoneNumbersPage() {
         {rows.length ? (
           <div className="table-wrap">
             <table className="data-table phone-preview-table">
+              <caption className="sr-only">Phone number normalization results</caption>
               <thead><tr><th>Input</th><th>Status</th><th>Standard number</th><th>Reason</th></tr></thead>
               <tbody>
                 {rows.map((row, index) => (
