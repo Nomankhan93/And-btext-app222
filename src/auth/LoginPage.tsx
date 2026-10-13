@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { AuthLayout } from './AuthLayout'
 import { useAuth } from './AuthProvider'
 import { errorMessage } from '../lib/errors'
+import { safeReturnTo } from './returnTo'
 
 export function LoginPage() {
   const { signIn } = useAuth()
@@ -19,7 +20,7 @@ export function LoginPage() {
     setError(null)
     try {
       await signIn(email, password)
-      navigate(searchParams.get('returnTo') || '/dashboard', { replace: true })
+      navigate(safeReturnTo(searchParams.get('returnTo')), { replace: true })
     } catch (reason) {
       setError(errorMessage(reason, 'Sign in failed.'))
     } finally {

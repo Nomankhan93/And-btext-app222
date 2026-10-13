@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type PropsWithChildren } from 'react'
 import { useAuth } from '../auth/AuthProvider'
-import { errorMessage } from '../lib/errors'
-import { readOfflineWorkspaceLocator, writeOfflineWorkspaceLocator } from '../lib/offlineWorkspaceLocator'
+import { errorDiagnosticCategory, errorDiagnosticContext, errorMessage } from '../lib/errors'
+import { clearOfflineWorkspaceLocator, readOfflineWorkspaceLocator, writeOfflineWorkspaceLocator } from '../lib/offlineWorkspaceLocator'
 import { supabase } from '../lib/supabase'
 
 export interface PersonalWorkspace {
@@ -42,7 +42,7 @@ function cachedWorkspace(userId: string): PersonalWorkspace | null {
 }
 
 export function WorkspaceProvider({ children }: PropsWithChildren) {
-  const { user } = useAuth()
+  const { user, revalidateSession } = useAuth()
   const userId = user?.id ?? null
   const [state, setState] = useState<WorkspaceState>({ owner: null, workspace: null, authority: null, loading: false, error: null })
   const generation = useRef(0)
@@ -73,25 +73,54 @@ export function WorkspaceProvider({ children }: PropsWithChildren) {
       const row = (data as PersonalWorkspaceRow[] | null)?.[0]
       if (!row?.workspace_id) throw new Error('Your personal workspace could not be provisioned.')
       const workspace = { id: row.workspace_id, name: row.name, slug: row.slug }
-      writeOfflineWorkspaceLocator(userId, { workspaceId: workspace.id, name: workspace.name, slug: workspace.slug })
-      if (request === generation.current) setState({ owner: userId, workspace, authority: 'server', loading: false, error: null })
-    } catch (reason) {
       if (request === generation.current) {
-        setState((current) => ({
-          owner: userId,
-          workspace: current.owner === userId && current.workspace ? current.workspace : cached,
-          authority: current.owner === userId && current.workspace ? current.authority : (cached ? 'local' : null),
-          loading: false,
-          error: errorMessage(reason, 'Your BulkText account could not be prepared.'),
-        }))
+        writeOfflineWorkspaceLocator(userId, { workspaceId: workspace.id, name: workspace.name, slug: workspace.slug })
+        setState({ owner: userId, workspace, authority: 'server', loading: false, error: null })
       }
+    } catch (reason) {
+      if (request !== generation.current) return
+      const category = errorDiagnosticCategory(errorDiagnosticContext(reason))
+      const message = errorMessage(reason, 'Your BulkText account could not be prepared.')
+
+      if (category === 'authentication' || category === 'permission') {
+        clearOfflineWorkspaceLocator(userId)
+        setState({ owner: userId, workspace: null, authority: null, loading: false, error: message })
+        if (category === 'authentication') void revalidateSession()
+        return
+      }
+
+      setState((current) => ({
+        owner: userId,
+        workspace: current.owner === userId && current.workspace ? current.workspace : cached,
+        authority: current.owner === userId && current.workspace ? current.authority : (cached ? 'local' : null),
+        loading: false,
+        error: message,
+      }))
     }
-  }, [userId])
+  }, [revalidateSession, userId])
 
   useEffect(() => {
     void refresh()
     return () => { generation.current += 1 }
   }, [refresh])
+
+  useEffect(() => {
+    if (!userId) return
+    const refreshWhenActive = () => {
+      if (navigator.onLine) void refresh()
+    }
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible' && navigator.onLine) void refresh()
+    }
+    window.addEventListener('online', refreshWhenActive)
+    window.addEventListener('focus', refreshWhenActive)
+    document.addEventListener('visibilitychange', refreshWhenVisible)
+    return () => {
+      window.removeEventListener('online', refreshWhenActive)
+      window.removeEventListener('focus', refreshWhenActive)
+      document.removeEventListener('visibilitychange', refreshWhenVisible)
+    }
+  }, [refresh, userId])
 
   // Hide the previous account immediately, before the identity-change effect runs.
   const owned = state.owner === userId

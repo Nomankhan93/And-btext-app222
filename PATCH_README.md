@@ -1,9 +1,7 @@
-# Current Patch — Web 0.19.7
+# Current Patch — Web 0.19.8
 
-**Production Observability & Error Diagnostics**
+**Auth, Session & Workspace Boundary Hardening**
 
-This patch connects BulkText's safe error-classification boundary to a privacy-safe client diagnostic buffer, global/runtime capture and a support-facing Settings export. Diagnostic events are session-scoped, bounded and sanitized; no raw backend details or user/contact/token/URL content is persisted.
+Hardens mounted-session revalidation, account-switch/sign-out cleanup, protected return targets, stale workspace responses and workspace authorization loss without changing backend/database contracts.
 
-No remote telemetry backend, database migration or workflow change is included. Existing `0.19.6-r1` bundle budgets remain mandatory.
-
-See `PATCH_0_19_7_README.md`.
+See `PATCH_0_19_8_README.md`.

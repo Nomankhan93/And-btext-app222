@@ -1,7 +1,5 @@
-# Validation — Web 0.19.7
+# Validation — Web 0.19.8
 
-Web `0.19.7` production-observability source contract: **44 assertions PASS**. Retained source/PWA contracts pass for **440 combined assertions**, and project preflight passes for Web `0.19.7` / backend `0.18.5`. Focused Vitest coverage is included for diagnostic redaction, domain-noise suppression, bounded session storage and sanitized support export.
+The 0.19.8 source/preflight contracts cover session lifecycle revalidation, safe internal return targets, stale async protection, account-scoped cleanup and workspace authorization revocation. Existing observability, PWA/offline, bootstrap split and bundle-budget guards remain required.
 
-The retained Web `0.19.6-r1` bootstrap/route-loading and bundle-budget gates remain authoritative. Final runtime, TypeScript, full Vitest, Vite build and post-build bundle-budget certification must be executed in the normal WSL checkout on Node `24.21.0` before commit.
-
-See `VALIDATION_0_19_7.md`.
+Final runtime certification must be performed in WSL on Node `24.21.0` using the command sequence in `VALIDATION_0_19_8.md`.

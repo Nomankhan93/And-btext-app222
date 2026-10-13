@@ -1,11 +1,14 @@
 import { useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { LoadingState } from '../components/StateViews'
 import { supabase } from '../lib/supabase'
 import { AuthLayout } from './AuthLayout'
+import { safeReturnTo } from './returnTo'
 
 export function AuthCallbackPage() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const returnTo = safeReturnTo(searchParams.get('returnTo'))
 
   useEffect(() => {
     if (!supabase) {
@@ -13,9 +16,9 @@ export function AuthCallbackPage() {
       return
     }
     void supabase.auth.getSession().then(({ data }) => {
-      navigate(data.session ? '/dashboard' : '/auth/login', { replace: true })
+      navigate(data.session ? returnTo : `/auth/login?returnTo=${encodeURIComponent(returnTo)}`, { replace: true })
     })
-  }, [navigate])
+  }, [navigate, returnTo])
 
   return (
     <AuthLayout title="Completing authentication" subtitle="BulkText is finishing your secure account session.">

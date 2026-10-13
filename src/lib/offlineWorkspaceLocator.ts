@@ -39,6 +39,14 @@ export function writeOfflineWorkspaceLocator(userId: string, locator: Omit<Offli
   }
 }
 
+export function clearOfflineWorkspaceLocator(userId: string) {
+  try {
+    localStorage.removeItem(key(userId))
+  } catch {
+    // Workspace locators are a convenience for local-draft access only.
+  }
+}
+
 export function clearOfflineWorkspaceLocators() {
   try {
     for (const storageKey of Object.keys(localStorage)) {

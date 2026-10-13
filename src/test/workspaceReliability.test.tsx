@@ -5,8 +5,8 @@ import { useState } from 'react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { WorkspaceProvider, useWorkspace } from '../workspace/WorkspaceProvider'
 import { RequireWorkspace } from '../workspace/RequireWorkspace'
-const mocks = vi.hoisted(() => ({ user: { id: 'one' }, rpc: vi.fn() }))
-vi.mock('../auth/AuthProvider', () => ({ useAuth: () => ({ user: mocks.user }) }))
+const mocks = vi.hoisted(() => ({ user: { id: 'one' }, rpc: vi.fn(), revalidateSession: vi.fn(async () => true) }))
+vi.mock('../auth/AuthProvider', () => ({ useAuth: () => ({ user: mocks.user, revalidateSession: mocks.revalidateSession }) }))
 vi.mock('../lib/supabase', () => ({ supabase: { rpc: mocks.rpc } }))
 function Form() {
   const [value, setValue] = useState('')
@@ -15,7 +15,7 @@ function Form() {
 }
 function App() { return <WorkspaceProvider><MemoryRouter><Routes><Route element={<RequireWorkspace />}><Route path="/" element={<Form />} /></Route></Routes></MemoryRouter></WorkspaceProvider> }
 function result(id: string) { return { data: [{ workspace_id: id, name: `Workspace ${id}`, slug: id }], error: null } }
-beforeEach(() => { localStorage.clear(); mocks.user = { id: 'one' }; mocks.rpc.mockReset().mockResolvedValue(result('one')) })
+beforeEach(() => { localStorage.clear(); mocks.user = { id: 'one' }; mocks.revalidateSession.mockClear(); mocks.rpc.mockReset().mockResolvedValue(result('one')) })
 afterEach(() => { cleanup(); localStorage.clear() })
 it('preserves the mounted form across same-user auth object refresh and explicit refresh failure', async () => {
   const view = render(<App />)
@@ -45,4 +45,17 @@ it('hides the old account immediately and ignores its late refresh response', as
   await act(async () => { resolve(result('one')) })
   await waitFor(() => expect(screen.queryByText('Workspace one')).toBeNull())
   expect((screen.getByLabelText('Draft') as HTMLInputElement).value).toBe('')
+})
+
+it('drops verified workspace authority immediately when server permission is revoked', async () => {
+  render(<App />)
+  expect(await screen.findByText('Workspace one')).toBeTruthy()
+  expect(localStorage.length).toBeGreaterThan(0)
+
+  mocks.rpc.mockResolvedValueOnce({ data: null, error: { message: 'permission denied', status: 403 } })
+  fireEvent.click(screen.getByText('Refresh workspace'))
+
+  expect(await screen.findByText('Account setup needs attention')).toBeTruthy()
+  expect(screen.queryByText('Workspace one')).toBeNull()
+  expect(localStorage.length).toBe(0)
 })

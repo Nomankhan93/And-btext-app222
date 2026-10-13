@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, useLocation } from 'react-router-dom'
 import App from '../App'
 
@@ -14,6 +14,8 @@ const auth = vi.hoisted(() => ({
     signOut: vi.fn(async () => {}),
     sendPasswordReset: vi.fn(async () => {}),
     updatePassword: vi.fn(async () => {}),
+    revalidating: false,
+    revalidateSession: vi.fn(async () => true),
   },
 }))
 
@@ -30,7 +32,7 @@ vi.mock('../pages/DashboardPage', () => ({ DashboardPage: () => <h1>Dashboard ro
 
 function LocationProbe() {
   const location = useLocation()
-  return <span data-testid="location">{location.pathname}{location.search}</span>
+  return <span data-testid="location">{location.pathname}{location.search}{location.hash}</span>
 }
 
 function renderRoute(entry: string) {
@@ -68,10 +70,10 @@ it('redirects signed-in root visits to the protected dashboard', async () => {
 })
 
 it('keeps protected-route returnTo behavior exact for signed-out visitors', async () => {
-  renderRoute('/campaigns?status=active')
+  renderRoute('/campaigns?status=active#queued')
 
   expect(await screen.findByRole('heading', { name: 'Welcome back' })).toBeTruthy()
-  expect(screen.getByTestId('location').textContent).toBe('/auth/login?returnTo=%2Fcampaigns%3Fstatus%3Dactive')
+  expect(screen.getByTestId('location').textContent).toBe('/auth/login?returnTo=%2Fcampaigns%3Fstatus%3Dactive%23queued')
 })
 
 it('keeps direct login public and allows the landing Sign in CTA to reach it', async () => {
@@ -85,4 +87,16 @@ it('keeps direct login public and allows the landing Sign in CTA to reach it', a
   renderRoute('/auth/login')
   expect(await screen.findByRole('heading', { name: 'Welcome back' })).toBeTruthy()
   expect(screen.getByTestId('location').textContent).toBe('/auth/login')
+})
+
+it('does not honor an external or auth-loop return target after sign in', async () => {
+  auth.value.user = { id: 'user-1' }
+  renderRoute('/auth/login?returnTo=https%3A%2F%2Fexample.com%2Fsteal')
+  const email = await screen.findByLabelText('Email')
+  fireEvent.change(email, { target: { value: 'user@example.com' } })
+  fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'password123' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
+  await waitFor(() => {
+    expect(screen.getByTestId('location').textContent).toBe('/dashboard')
+  })
 })

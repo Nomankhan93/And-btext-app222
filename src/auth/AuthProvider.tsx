@@ -1,6 +1,8 @@
-import { createContext, useContext, useEffect, useMemo, useState, type PropsWithChildren } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type PropsWithChildren } from 'react'
 import type { Session, User } from '@supabase/supabase-js'
 import { clearCampaignDrafts } from '../lib/campaignDraftStorage'
+import { errorDiagnosticCategory, errorDiagnosticContext } from '../lib/errors'
+import { clearRecentDiagnosticEvents, reportDiagnostic } from '../lib/observability'
 import { clearOfflineWorkspaceLocators } from '../lib/offlineWorkspaceLocator'
 import { supabase } from '../lib/supabase'
 
@@ -14,6 +16,8 @@ interface AuthContextValue {
   session: Session | null
   user: User | null
   loading: boolean
+  revalidating: boolean
+  revalidateSession: () => Promise<boolean>
   signIn: (email: string, password: string) => Promise<void>
   signUp: (input: SignUpInput) => Promise<{ emailConfirmationRequired: boolean }>
   signOut: () => Promise<void>
@@ -28,9 +32,23 @@ function requireSupabase() {
   return supabase
 }
 
+async function clearAccountScopedState() {
+  await clearCampaignDrafts()
+  clearOfflineWorkspaceLocators()
+  clearRecentDiagnosticEvents()
+}
+
 export function AuthProvider({ children }: PropsWithChildren) {
   const [session, setSession] = useState<Session | null>(null)
   const [loading, setLoading] = useState(true)
+  const [revalidating, setRevalidating] = useState(false)
+  const sessionRef = useRef<Session | null>(null)
+  const generation = useRef(0)
+  const revalidationInFlight = useRef<Promise<boolean> | null>(null)
+
+  useEffect(() => {
+    sessionRef.current = session
+  }, [session])
 
   useEffect(() => {
     if (!supabase) {
@@ -40,34 +58,130 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
     let active = true
     let authEventReceived = false
+    const request = ++generation.current
+
     void supabase.auth.getSession().then(({ data }) => {
-      if (active && !authEventReceived) {
+      if (active && request === generation.current && !authEventReceived) {
+        sessionRef.current = data.session
         setSession(data.session)
         setLoading(false)
       }
-    }).catch(() => { if (active && !authEventReceived) setLoading(false) })
+    }).catch((reason) => {
+      if (active && request === generation.current && !authEventReceived) {
+        reportDiagnostic(reason, { source: 'handled-error', severity: 'warning' })
+        setLoading(false)
+      }
+    })
 
     const { data: subscription } = supabase.auth.onAuthStateChange((event, nextSession) => {
       if (!active) return
       authEventReceived = true
-      if (event === 'SIGNED_OUT') {
-        void clearCampaignDrafts()
-        clearOfflineWorkspaceLocators()
+      const eventGeneration = ++generation.current
+      const previousUserId = sessionRef.current?.user.id ?? null
+      const nextUserId = nextSession?.user.id ?? null
+      const identityChanged = Boolean(previousUserId && nextUserId && previousUserId !== nextUserId)
+
+      if (identityChanged) {
+        sessionRef.current = null
+        setSession(null)
+        setLoading(true)
+        void clearAccountScopedState().then(() => {
+          if (!active || eventGeneration !== generation.current) return
+          sessionRef.current = nextSession
+          setSession(nextSession)
+          setLoading(false)
+        })
+        return
       }
+
+      if (event === 'SIGNED_OUT' || !nextSession) void clearAccountScopedState()
+      sessionRef.current = nextSession
       setSession(nextSession)
       setLoading(false)
     })
 
     return () => {
       active = false
+      generation.current += 1
       subscription.subscription.unsubscribe()
     }
   }, [])
+
+  const revalidateSession = useCallback((): Promise<boolean> => {
+    if (revalidationInFlight.current) return revalidationInFlight.current
+    const current = sessionRef.current
+    if (!supabase || !current) return Promise.resolve(false)
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return Promise.resolve(true)
+
+    const request = ++generation.current
+    setRevalidating(true)
+    const task = (async () => {
+      try {
+        const { data, error } = await supabase.auth.getUser()
+        if (request !== generation.current) return Boolean(sessionRef.current)
+        if (error || !data.user) {
+          const reason = error ?? new Error('Auth session missing')
+          const category = errorDiagnosticCategory(errorDiagnosticContext(reason))
+          if (category === 'authentication' || category === 'permission') {
+            await clearAccountScopedState()
+            reportDiagnostic(reason, { source: 'handled-error', category: 'authentication', severity: 'warning' })
+            if (request === generation.current) {
+              sessionRef.current = null
+              setSession(null)
+            }
+            return false
+          }
+          reportDiagnostic(reason, { source: 'handled-error', category: category === 'domain' ? 'unknown' : category, severity: 'warning' })
+          return Boolean(sessionRef.current)
+        }
+
+        const activeSession = sessionRef.current
+        if (activeSession && activeSession.user.id !== data.user.id) {
+          await clearAccountScopedState()
+          if (request === generation.current) {
+            sessionRef.current = null
+            setSession(null)
+          }
+          reportDiagnostic(new Error('Authenticated identity changed during session validation'), { source: 'handled-error', category: 'authentication', severity: 'warning' })
+          return false
+        }
+        return true
+      } catch (reason) {
+        if (request === generation.current) reportDiagnostic(reason, { source: 'handled-error', severity: 'warning' })
+        return Boolean(sessionRef.current)
+      } finally {
+        setRevalidating(false)
+      }
+    })()
+
+    revalidationInFlight.current = task
+    void task.finally(() => {
+      if (revalidationInFlight.current === task) revalidationInFlight.current = null
+    })
+    return task
+  }, [])
+
+  useEffect(() => {
+    const revalidateWhenActive = () => { void revalidateSession() }
+    const revalidateWhenVisible = () => {
+      if (document.visibilityState === 'visible') void revalidateSession()
+    }
+    window.addEventListener('online', revalidateWhenActive)
+    window.addEventListener('focus', revalidateWhenActive)
+    document.addEventListener('visibilitychange', revalidateWhenVisible)
+    return () => {
+      window.removeEventListener('online', revalidateWhenActive)
+      window.removeEventListener('focus', revalidateWhenActive)
+      document.removeEventListener('visibilitychange', revalidateWhenVisible)
+    }
+  }, [revalidateSession])
 
   const value = useMemo<AuthContextValue>(() => ({
     session,
     user: session?.user ?? null,
     loading,
+    revalidating,
+    revalidateSession,
     async signIn(email, password) {
       const client = requireSupabase()
       const { error } = await client.auth.signInWithPassword({ email: email.trim(), password })
@@ -88,10 +202,12 @@ export function AuthProvider({ children }: PropsWithChildren) {
     },
     async signOut() {
       const client = requireSupabase()
-      await clearCampaignDrafts()
+      generation.current += 1
+      await clearAccountScopedState()
       const { error } = await client.auth.signOut()
       if (error) throw error
-      clearOfflineWorkspaceLocators()
+      sessionRef.current = null
+      setSession(null)
     },
     async sendPasswordReset(email) {
       const client = requireSupabase()
@@ -105,7 +221,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       const { error } = await client.auth.updateUser({ password })
       if (error) throw error
     },
-  }), [loading, session])
+  }), [loading, revalidateSession, revalidating, session])
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

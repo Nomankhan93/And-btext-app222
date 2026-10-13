@@ -8,6 +8,7 @@ const requiredFiles = [
   'src/test/mobileDialogFocus0194.test.tsx','scripts/test-mobile-dialog-focus0194-source.mjs',
   'src/test/errors.test.ts','scripts/test-error-presentation0195-source.mjs',
   'src/lib/observability.ts','src/components/AppErrorBoundary.tsx','src/test/observability0197.test.ts','scripts/test-observability0197-source.mjs',
+  'src/auth/returnTo.ts','src/test/authBoundary0198.test.ts','scripts/test-auth-session-workspace0198-source.mjs','docs/AUTH_SESSION_WORKSPACE_BOUNDARY_0198.md',
   'src/test/routeLoading0196.test.tsx','scripts/test-route-loading0196-source.mjs','scripts/test-route-loading0196-build.mjs','scripts/test-bootstrap-split0196r1-source.mjs','src/AppBootstrap.tsx','vite.config.ts',
   'docs/DRAFT_IMPORT_CAMPAIGN_UX_0186.md','docs/OFFLINE_DRAFT_WORKSPACE_01810.md',
   'supabase/migrations/20261010000100_delivery_recovery_contract_hardening.sql',
@@ -63,7 +64,7 @@ if (/service[_-]?role|jwt[_-]?secret|sb_secret_/i.test(envExample)) {
   process.exit(1)
 }
 
-if (packageJson.version !== '0.19.7') { console.error(`Preflight failed. Expected package version 0.19.7, got ${packageJson.version}`); process.exit(1) }
+if (packageJson.version !== '0.19.8') { console.error(`Preflight failed. Expected package version 0.19.8, got ${packageJson.version}`); process.exit(1) }
 
 const appShell = await readFile(new URL('../src/components/AppShell.tsx', import.meta.url), 'utf8')
 const mobileDialogFocusMarkers = [
@@ -78,7 +79,7 @@ const mobileDialogFocusMarkers = [
   'aria-modal="true"',
 ]
 const missingMobileDialogFocusMarkers = mobileDialogFocusMarkers.filter((marker) => !appShell.includes(marker))
-if (missingMobileDialogFocusMarkers.length) { console.error(`Preflight failed. 0.19.7 mobile dialog focus markers missing: ${missingMobileDialogFocusMarkers.join(', ')}`); process.exit(1) }
+if (missingMobileDialogFocusMarkers.length) { console.error(`Preflight failed. 0.19.8 mobile dialog focus markers missing: ${missingMobileDialogFocusMarkers.join(', ')}`); process.exit(1) }
 
 
 const errorsSource = await readFile(new URL('../src/lib/errors.ts', import.meta.url), 'utf8')
@@ -94,7 +95,7 @@ const safeErrorMarkers = [
   'You do not have permission to perform this action.',
 ]
 const missingSafeErrorMarkers = safeErrorMarkers.filter((marker) => !errorsSource.includes(marker))
-if (missingSafeErrorMarkers.length) { console.error(`Preflight failed. 0.19.7 safe-error markers missing: ${missingSafeErrorMarkers.join(', ')}`); process.exit(1) }
+if (missingSafeErrorMarkers.length) { console.error(`Preflight failed. 0.19.8 safe-error markers missing: ${missingSafeErrorMarkers.join(', ')}`); process.exit(1) }
 if (errorsSource.includes('parts.push(details)') || errorsSource.includes('`Hint: ${hint}`') || errorsSource.includes('`[${code}]`')) {
   console.error('Preflight failed. Raw backend details, hints or codes must not be concatenated into user-facing error text.')
   process.exit(1)
@@ -104,7 +105,7 @@ const observabilitySource = await readFile(new URL('../src/lib/observability.ts'
 const appErrorBoundarySource = await readFile(new URL('../src/components/AppErrorBoundary.tsx', import.meta.url), 'utf8')
 const settingsSource = await readFile(new URL('../src/pages/SettingsPage.tsx', import.meta.url), 'utf8')
 const observabilityMarkers = [
-  "OBSERVABILITY_RELEASE = '0.19.7'",
+  "OBSERVABILITY_RELEASE = '0.19.8'",
   "STORAGE_KEY = 'bulktext:diagnostics:v1'",
   'MAX_EVENTS = 25',
   "window.addEventListener('error'",
@@ -114,17 +115,52 @@ const observabilityMarkers = [
   'sessionStorage',
 ]
 const missingObservabilityMarkers = observabilityMarkers.filter((marker) => !observabilitySource.includes(marker))
-if (missingObservabilityMarkers.length) { console.error(`Preflight failed. 0.19.7 observability markers missing: ${missingObservabilityMarkers.join(', ')}`); process.exit(1) }
+if (missingObservabilityMarkers.length) { console.error(`Preflight failed. 0.19.8 observability markers missing: ${missingObservabilityMarkers.join(', ')}`); process.exit(1) }
 if (observabilitySource.includes('window.location.href') || observabilitySource.includes('window.location.search') || observabilitySource.includes('localStorage')) {
-  console.error('Preflight failed. 0.19.7 diagnostics must not retain full URLs, query strings or persistent local storage.')
+  console.error('Preflight failed. 0.19.8 diagnostics must not retain full URLs, query strings or persistent local storage.')
   process.exit(1)
 }
 if (!errorsSource.includes("reportDiagnostic(context, { source: 'handled-error'") || !errorsSource.includes("if (category !== 'domain')")) {
-  console.error('Preflight failed. 0.19.7 handled-error observability boundary is incomplete.')
+  console.error('Preflight failed. 0.19.8 handled-error observability boundary is incomplete.')
   process.exit(1)
 }
 if (!appErrorBoundarySource.includes("source: 'react-render'") || !settingsSource.includes('Technical diagnostics') || !settingsSource.includes('Copy diagnostics') || !settingsSource.includes('Clear diagnostics')) {
-  console.error('Preflight failed. 0.19.7 render/support diagnostic surfaces are incomplete.')
+  console.error('Preflight failed. 0.19.8 render/support diagnostic surfaces are incomplete.')
+  process.exit(1)
+}
+
+const authProviderSource = await readFile(new URL('../src/auth/AuthProvider.tsx', import.meta.url), 'utf8')
+const requireAuthSource = await readFile(new URL('../src/auth/RequireAuth.tsx', import.meta.url), 'utf8')
+const returnToSource = await readFile(new URL('../src/auth/returnTo.ts', import.meta.url), 'utf8')
+const loginSource = await readFile(new URL('../src/auth/LoginPage.tsx', import.meta.url), 'utf8')
+const workspaceProviderSource = await readFile(new URL('../src/workspace/WorkspaceProvider.tsx', import.meta.url), 'utf8')
+const workspaceLocatorSource = await readFile(new URL('../src/lib/offlineWorkspaceLocator.ts', import.meta.url), 'utf8')
+const boundaryMarkers = [
+  'revalidateSession: () => Promise<boolean>',
+  'supabase.auth.getUser()',
+  "window.addEventListener('online'",
+  "window.addEventListener('focus'",
+  "document.addEventListener('visibilitychange'",
+  'revalidationInFlight',
+  'clearAccountScopedState',
+  'clearRecentDiagnosticEvents()',
+]
+const missingBoundaryMarkers = boundaryMarkers.filter((marker) => !authProviderSource.includes(marker))
+if (missingBoundaryMarkers.length) { console.error(`Preflight failed. 0.19.8 auth/session markers missing: ${missingBoundaryMarkers.join(', ')}`); process.exit(1) }
+if (!returnToSource.includes('safeReturnTo') || !returnToSource.includes("raw.startsWith('//')") || !returnToSource.includes("parsed.pathname.startsWith('/auth/')")) {
+  console.error('Preflight failed. 0.19.8 safe returnTo boundary is incomplete.')
+  process.exit(1)
+}
+if (!requireAuthSource.includes('protectedReturnTo(location)') || !loginSource.includes("safeReturnTo(searchParams.get('returnTo'))")) {
+  console.error('Preflight failed. 0.19.8 protected returnTo integration is incomplete.')
+  process.exit(1)
+}
+if (!workspaceProviderSource.includes("category === 'authentication' || category === 'permission'") || !workspaceProviderSource.includes('clearOfflineWorkspaceLocator(userId)') || !workspaceProviderSource.includes('workspace: null, authority: null')) {
+  console.error('Preflight failed. 0.19.8 workspace authorization-loss boundary is incomplete.')
+  process.exit(1)
+}
+if (!workspaceLocatorSource.includes('clearOfflineWorkspaceLocator(userId: string)')) {
+  console.error('Preflight failed. 0.19.8 single-workspace locator invalidation helper is missing.')
   process.exit(1)
 }
 
@@ -140,11 +176,11 @@ const bootstrapMarkers = [
   '<Suspense fallback=',
 ]
 if (bootstrapMarkers.some((marker) => !mainSource.includes(marker)) || mainSource.includes("from './auth/AuthProvider'") || mainSource.includes("from './workspace/WorkspaceProvider'") || mainSource.includes("import App from './App'")) {
-  console.error('Preflight failed. 0.19.7 initial bootstrap split is missing or providers leaked back into the static entry.')
+  console.error('Preflight failed. 0.19.8 initial bootstrap split is missing or providers leaked back into the static entry.')
   process.exit(1)
 }
 for (const marker of ["import App from './App'", "from './auth/AuthProvider'", "from './workspace/WorkspaceProvider'", '<AuthProvider>', '<WorkspaceProvider>', '<App />']) {
-  if (!bootstrapSource.includes(marker)) { console.error(`Preflight failed. 0.19.7 AppBootstrap marker missing: ${marker}`); process.exit(1) }
+  if (!bootstrapSource.includes(marker)) { console.error(`Preflight failed. 0.19.8 AppBootstrap marker missing: ${marker}`); process.exit(1) }
 }
 if (
   !bootstrapContractSource.includes('INITIAL_JS_BUDGET_BYTES = 500 * 1024') ||
@@ -152,7 +188,7 @@ if (
   !bundleGateSource.includes("value?.name === 'AppBootstrap'") ||
   !bundleGateSource.includes('appEntry[1]?.dynamicImports?.includes(key)')
 ) {
-  console.error('Preflight failed. 0.19.7 bootstrap/bundle correction gates are incomplete.')
+  console.error('Preflight failed. 0.19.8 bootstrap/bundle correction gates are incomplete.')
   process.exit(1)
 }
 
@@ -170,10 +206,10 @@ const routeLoadingMarkers = [
   '<Suspense fallback={<LoadingState',
 ]
 const missingRouteLoadingMarkers = routeLoadingMarkers.filter((marker) => !appSource.includes(marker))
-if (missingRouteLoadingMarkers.length) { console.error(`Preflight failed. 0.19.7 route-loading markers missing: ${missingRouteLoadingMarkers.join(', ')}`); process.exit(1) }
-if (!viteSource.includes("manifest: 'asset-manifest.json'")) { console.error('Preflight failed. 0.19.7 Vite asset manifest output is missing.'); process.exit(1) }
-for (const marker of ["const VERSION = '0.19.7'", "'/asset-manifest.json'", 'buildManifestAssets', 'cold-start offline route coverage after code splitting']) {
-  if (!serviceWorkerSource.includes(marker)) { console.error(`Preflight failed. 0.19.7 lazy-route offline marker missing: ${marker}`); process.exit(1) }
+if (missingRouteLoadingMarkers.length) { console.error(`Preflight failed. 0.19.8 route-loading markers missing: ${missingRouteLoadingMarkers.join(', ')}`); process.exit(1) }
+if (!viteSource.includes("manifest: 'asset-manifest.json'")) { console.error('Preflight failed. 0.19.8 Vite asset manifest output is missing.'); process.exit(1) }
+for (const marker of ["const VERSION = '0.19.8'", "'/asset-manifest.json'", 'buildManifestAssets', 'cold-start offline route coverage after code splitting']) {
+  if (!serviceWorkerSource.includes(marker)) { console.error(`Preflight failed. 0.19.8 lazy-route offline marker missing: ${marker}`); process.exit(1) }
 }
 
 const migration = await readFile(new URL('../supabase/migrations/20261001000340_delivery_attempts_callbacks_recovery.sql', import.meta.url), 'utf8')
@@ -284,6 +320,6 @@ for (const marker of ["version', '') <> '0.18.5'", 'Production schema must not e
   if (!freshVerifier.includes(marker)) { console.error(`Preflight failed. Fresh-schema 0.18.4 marker missing: ${marker}`); process.exit(1) }
 }
 
-console.log('BulkText Web 0.19.7 / backend 0.18.5 preflight PASS')
+console.log('BulkText Web 0.19.8 / backend 0.18.5 preflight PASS')
 
-if (packageJson.bulktext?.backendContractVersion !== '0.18.5') { console.error('Expected backend contract 0.18.5 for Web 0.19.7'); process.exit(1) }
+if (packageJson.bulktext?.backendContractVersion !== '0.18.5') { console.error('Expected backend contract 0.18.5 for Web 0.19.8'); process.exit(1) }
