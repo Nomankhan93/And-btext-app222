@@ -27,6 +27,8 @@ export interface SmsGatewayPluginInterface {
   startGateway(): Promise<{ success: boolean }>
   stopGateway(): Promise<{ success: boolean }>
   getGatewayStatus(): Promise<GatewayStatusResult>
+  pairDevice(options: { pairingCode: string; deviceName?: string }): Promise<{ success: boolean; deviceId: string }>
+  refreshSimInventory(): Promise<{ success: boolean }>
 }
 
 const SmsGateway = registerPlugin<SmsGatewayPluginInterface>('SmsGateway')
